@@ -16,7 +16,7 @@ An isolated, throw-away Drupal environment for module development, bug reproduct
 ```bash
 LAB="${CLAUDE_PLUGIN_DATA:-$TMPDIR}/labs/<name>" && mkdir -p "$LAB" && cd "$LAB"
 composer create-project drupal/recommended-project:^<major.minor> . --no-interaction
-composer require --dev drupal/core-dev:^<major.minor> drush/drush:^13
+composer require --dev drupal/core-dev:^<major.minor> --with-all-dependencies && composer require drush/drush:^13
 ddev config --project-type=drupal --docroot=web --php-version=<php> --project-name=dsp-<name>
 touch .drupal-superpowers-lab
 ddev start
@@ -29,7 +29,7 @@ Teardown: `ddev delete -Oy dsp-<name> && rm -rf "$LAB"`.
 
 ## Recipe: Docker Compose (when only `docker` exists)
 
-Use `fixtures/lab-compose/` from the plugin (php + mariadb) copied into the lab directory; `docker compose up -d`, then the same Composer/Drush steps via `docker compose exec php ...`. Teardown: `docker compose down -v && rm -rf "$LAB"`.
+Use `fixtures/lab-compose/` from the plugin (php + mariadb) copied into the lab directory; `docker compose up -d` (set `DSP_WEB_PORT` to a free host port; default 8480), then the same Composer/Drush steps via `docker compose exec php ...`. Teardown: `docker compose down -v && rm -rf "$LAB"`.
 
 ## What the lab proves
 

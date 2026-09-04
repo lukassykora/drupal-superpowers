@@ -59,6 +59,16 @@ Bash for read-only agents is restricted by instruction to read-only commands (`g
 
 `session-start`, `guard-bash`, `lint-php`, `stop-gate`. The guard's destructive list is the single source of truth for both hooks and the `dangerous-env` evals.
 
+## 4b. Phase 2 additions (2026-09-04)
+
+| name | description |
+|---|---|
+| `drupal-frontend` | Use when working in a Drupal theme or on front-end output: Twig templates, *.libraries.yml, Drupal.behaviors and once(), preprocess functions, theme suggestions, Single Directory Components, CSS/JS assets, or accessibility of rendered markup; and when reviewing theme code. |
+| `drupal-performance` | Use when a Drupal page, route, Views listing, cron, queue, or migration is slow or memory-heavy, when code loads entities in loops (N+1), runs queries per row, calls external APIs in requests, or when asked to profile, benchmark, or review Drupal performance and cache hit rates. |
+| `drupal-migrate-api` | Use when writing or debugging Drupal migrations with the Migrate API: migration YAML, source, process, and destination plugins, migrate_plus/migrate_tools, drush migrate:import/status/rollback, id maps and high-water marks, or moving content from Drupal 7, CSV, JSON, or another database into Drupal; not for core version upgrades. |
+
+Agents: `drupal-legacy-archaeologist` (read-only inventory of D7/8/9 code, never rewrites), `drupal-frontend-specialist` (theme work with browser verification), `drupal-performance-reviewer` (read-only measurements and ranked hotspots). Contribution mode (contrib module / core) is a reference of `drupal-project-understanding`, not a skill.
+
 ## 5. What is intentionally absent
 
 - No skill per Drupal subsystem (forms, entities, routing, Twig…). Those are `references/` pages under `drupal-module-development`, loaded when linked.

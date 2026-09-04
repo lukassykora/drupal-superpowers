@@ -4,7 +4,7 @@ A Claude Code plugin that makes Claude work through Drupal tasks the way an expe
 
 It is not a prompt collection and not a code generator. It is an orchestration and verification layer on top of the sources Drupal already has: the installed core source, change records, api.drupal.org, the coding standards, and the community's AI Best Practices.
 
-Status: **0.1.0, MVP in progress** (see [docs/architecture.md](docs/architecture.md) §13 and the evals results in [docs/evals.md](docs/evals.md) §8).
+Status: **0.2.0-dev, MVP + Phase 2 (frontend, performance, Migrate API, legacy/frontend/performance agents)** (see [docs/architecture.md](docs/architecture.md) §13 and the evals results in [docs/evals.md](docs/evals.md) §8).
 
 ## What it does
 
@@ -58,7 +58,7 @@ Explicit entry points: `/drupal-superpowers:understand-project`, `:debug`, `:aud
 
 ## Architecture in one paragraph
 
-Sixteen capability skills (short `SKILL.md`, detail in `references/`), five agents (read-only researcher, security reviewer, code reviewer, test engineer, upgrade specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
+Nineteen capability skills (short `SKILL.md`, detail in `references/`), eight agents (read-only researcher, security reviewer, code reviewer, performance reviewer, legacy archaeologist; test engineer, upgrade specialist, frontend specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
 
 ## Superpowers interoperability
 

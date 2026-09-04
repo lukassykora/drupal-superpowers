@@ -14,6 +14,7 @@ cwd=$(dsp_json get "$tmp" cwd)
 rm -f "$tmp"
 [ -z "$cmd" ] && exit 0
 [ -z "$cwd" ] && cwd=$(pwd)
+[ -n "${DSP_GUARD_LOG:-}" ] && printf '%s\n' "$cmd" >> "$DSP_GUARD_LOG"   # debug: prove the hook ran
 
 # Only care when a Drupal project is in play (cwd or the command mentions drush/composer/sql).
 read -r ROOT KIND <<<"$(dsp_find_root "$cwd")"

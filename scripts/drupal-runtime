@@ -54,9 +54,12 @@ if [ "$ADAPTER" = "none" ]; then
     SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}' "$ROOT/$cf" | grep -Ei '^(php|web|app|drupal|appserver|cli)$' | head -1)
     [ -z "$SVC" ] && SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1; exit}' "$ROOT/$cf")
     if dsp_have docker; then
-      ADAPTER="compose"; PREFIX_EXEC="docker compose exec $SVC"; PREFIX_DRUSH="docker compose exec $SVC vendor/bin/drush"; PREFIX_COMPOSER="docker compose exec $SVC composer"; PREFIX_NPM="docker compose exec $SVC npm"; PREFIX_PHP="docker compose exec $SVC php"
+      # Project name: COMPOSE_PROJECT_NAME, then top-level "name:" in the compose file, else Docker's default (directory name).
+      PN=${COMPOSE_PROJECT_NAME:-$(grep -E '^name:' "$ROOT/$cf" | head -1 | awk '{print $2}' | tr -d '"')}
+      DC="docker compose${PN:+ -p $PN}"
+      ADAPTER="compose"; PREFIX_EXEC="$DC exec $SVC"; PREFIX_DRUSH="$DC exec $SVC vendor/bin/drush"; PREFIX_COMPOSER="$DC exec $SVC composer"; PREFIX_NPM="$DC exec $SVC npm"; PREFIX_PHP="$DC exec $SVC php"
       EVIDENCE="$EVIDENCE|$cf service $SVC + docker binary"
-      [ $QUICK -eq 0 ] && { (cd "$ROOT" && docker compose ps --status running 2>/dev/null | grep -q "$SVC") && STATE="running" || STATE="stopped"; }
+      [ $QUICK -eq 0 ] && { (cd "$ROOT" && $DC ps --status running 2>/dev/null | grep -q "$SVC") && STATE="running" || STATE="stopped"; }
     else EVIDENCE="$EVIDENCE|$cf present but docker not on PATH"; fi
     break
   done

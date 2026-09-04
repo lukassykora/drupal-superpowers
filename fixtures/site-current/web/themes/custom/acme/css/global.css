@@ -1,0 +1,3 @@
+.acme-toggle { color: #999; background: #fff; cursor: pointer; }
+.acme-panel { display: none; }
+.acme-panel.is-open { display: block; }

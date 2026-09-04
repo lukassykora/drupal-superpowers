@@ -1,0 +1,13 @@
+{#
+/**
+ * @file
+ * Article teaser (fixture with planted defects).
+ */
+#}
+<article{{ attributes.addClass('teaser') }}>
+  <div class="acme-toggle" onclick="this.nextElementSibling.classList.toggle('is-open')">{{ label }}</div>
+  <div class="acme-panel">
+    {{ content.body|render|raw }}
+    <img src="{{ file_url(node.field_image.entity.uri.value) }}">
+  </div>
+</article>

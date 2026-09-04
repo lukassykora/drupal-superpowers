@@ -12,6 +12,7 @@ tmp=$(mktemp); printf '%s' "$input" > "$tmp"
 transcript=$(dsp_json get "$tmp" transcript_path)
 active=$(dsp_json get "$tmp" stop_hook_active)
 rm -f "$tmp"
+[ -n "${DSP_HOOK_LOG:-}" ] && printf 'stop-gate ran active=%s transcript=%s\n' "$active" "$transcript" >> "$DSP_HOOK_LOG"   # debug
 [ "$active" = "true" ] && exit 0
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
 
@@ -27,5 +28,6 @@ last=$(grep '"role":"assistant"' "$transcript" | tail -3)
 if printf '%s' "$last" | grep -Eq 'NOT VERIFIED|NOT APPLICABLE|VERIFY L[123]|Verified:|Not verified:'; then exit 0; fi
 
 ctx="drupal-superpowers: $edited Drupal file(s) were edited in this session but the reply has no verification report. Use the drupal-verification skill (drupal-superpowers:drupal-verification) and end with a short report: what was verified (coding standards, static analysis, tests, runtime) and what is NOT VERIFIED with the reason. Keep the rest of your reply as it was."
+[ -n "${DSP_HOOK_LOG:-}" ] && printf 'stop-gate BLOCK edited=%s\n' "$edited" >> "$DSP_HOOK_LOG"
 printf '{"decision":"block","reason":%s}\n' "$(dsp_json quote "$ctx")"
 exit 0

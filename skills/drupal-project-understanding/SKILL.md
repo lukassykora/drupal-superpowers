@@ -34,7 +34,7 @@ When not to use: pure documentation edits, or a follow-up task in a session wher
 
 ## Decision rules
 
-- **`project_kind`** changes the rules: `site` → site conventions and config sync matter; `custom-module`/`contrib-module` → no site assumptions, `core_version_requirement` and drupal.org conventions matter; `core` → core contribution workflow.
+- **`project_kind`** changes the rules: `site` → site conventions and config sync matter; `custom-module`/`contrib-module` → no site assumptions, `core_version_requirement` and drupal.org conventions matter; `core` → core contribution workflow. Details for contrib and core work: [references/contribution-mode.md](references/contribution-mode.md).
 - **`environment.class` other than LOCAL/DISPOSABLE** → every state-changing command needs the user's explicit approval for that environment (the guard hook enforces the destructive subset).
 - **`adapter: none`** → static and unit-level evidence only; say `NOT VERIFIED` for runtime claims and offer a disposable lab.
 - **Project tooling beats plugin defaults**: if `composer test`, a Makefile target, or `.gitlab-ci.yml` defines the commands, use those.

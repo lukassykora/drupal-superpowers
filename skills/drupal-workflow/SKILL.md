@@ -25,7 +25,7 @@ This skill orchestrates; the domain knowledge lives in the skills named below. *
 
 1. **Orient** — invoke `drupal-project-understanding`: version + class, runtime + environment class, paths, commands.
 2. **Understand** — read the code on the execution path (route → controller/form → services → entities → templates) before editing anything. Name the files you read.
-3. **Research** — invoke `drupal-research` for any API you cannot point to in the installed core (including APIs the user named); `drupal-contrib-research` before non-trivial custom code.
+3. **Research** — invoke `drupal-research` for any API you cannot point to in the installed core (including APIs the user named). For every new feature, endpoint, or module (bounded or architectural), invoke `drupal-contrib-research` first and write one line per candidate: core module, contrib module, or custom, with the reason; only then design custom code.
 4. **Design** — invoke `drupal-architecture` for mechanism choices; write 2–3 options with trade-offs for architectural work; pick the smallest Drupal-native one. Then, when the change touches access, permissions, routes, user data, output, queries, uploads, or redirects, invoke `drupal-security`; when it renders anything that varies by user, permissions, language, or query, invoke `drupal-cacheability`; when it adds or changes config, invoke `drupal-config`.
 5. **Test plan** — invoke `drupal-testing`: cheapest layer that proves the behaviour; for bugs, the regression test comes first and must fail.
 6. **Implement** — invoke `drupal-module-development` for module files; the smallest correct change; project conventions over preferences; no unrelated refactoring.

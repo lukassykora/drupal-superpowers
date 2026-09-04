@@ -73,6 +73,7 @@ fi
 # ---- php
 PHP_CONSTRAINT=""; [ -f "$CJ" ] && PHP_CONSTRAINT=$(dsp_json get "$CJ" require.php)
 [ -z "$PHP_CONSTRAINT" ] && [ -f "$CL" ] && PHP_CONSTRAINT=$(dsp_json get "$CL" platform.php)
+[ -z "$PHP_CONSTRAINT" ] && [ -f "$D/core/composer.json" ] && PHP_CONSTRAINT="$(dsp_json get "$D/core/composer.json" require.php) (from core/composer.json)"
 PHP_LOCAL=""; dsp_have php && PHP_LOCAL=$(php -r 'echo PHP_VERSION;' 2>/dev/null || true)
 
 # ---- paths
@@ -88,7 +89,8 @@ CUSTOM_THEMES=$( [ -d "$D/themes/custom" ] && list_dirs_with_info "$D/themes/cus
 PROFILES=$( [ -d "$D/profiles/custom" ] && list_dirs_with_info "$D/profiles/custom" | xargs -n1 basename 2>/dev/null || true)
 RECIPES=$( [ -d "$ROOT/recipes" ] && find "$ROOT/recipes" -maxdepth 2 -name recipe.yml 2>/dev/null | xargs -n1 dirname 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
 CONFIG_SYNC=""
-if [ -f "$D/sites/default/settings.php" ]; then CONFIG_SYNC=$(grep -o "config_sync_directory'\] *= *'[^']*'" "$D/sites/default/settings.php" 2>/dev/null | head -1 | sed "s/.*'\([^']*\)'$/\1/"); fi
+if [ -f "$D/sites/default/settings.php" ]; then CONFIG_SYNC=$(grep -v '^ *\(#\|//\)' "$D/sites/default/settings.php" 2>/dev/null | grep -o "config_sync_directory'\] *= *'[^']*'" | head -1 | sed "s/.*'\([^']*\)'$/\1/"); fi
+[ -z "$CONFIG_SYNC" ] && [ -f "$D/sites/default/settings.php" ] && CONFIG_SYNC=$(grep -v '^ *\(#\|//\)' "$D/sites/default/settings.php" | grep -o "config_sync_directory'\] *= *[^;]*" | head -1 | sed "s/.*= *//")
 [ -z "$CONFIG_SYNC" ] && [ -d "$ROOT/config/sync" ] && CONFIG_SYNC="config/sync"
 CONFIG_SPLIT=false; { haslock drupal/config_split || ls "$ROOT/${CONFIG_SYNC#../}"/config_split.*.yml >/dev/null 2>&1; } && CONFIG_SPLIT=true
 

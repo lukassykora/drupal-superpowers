@@ -21,7 +21,9 @@ $profile
 $runtime
 Facts above come from files, not memory; anything not listed is unknown until checked.
 
-Skill routing: invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; several can apply in sequence. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
+Two rules in this repo: (1) invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; (2) never end a reply that says done, fixed, works, or passes without invoking drupal-verification first, even for a one-line change. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
+
+Skill routing (several can apply in sequence):
 - version, paths, runtime, or commands unknown → drupal-project-understanding
 - build / change / fix something in this Drupal project (no Superpowers process skill active) → drupal-workflow
 - unsure an API, service, hook, or method exists, or asked to use a named one → drupal-research
@@ -32,10 +34,13 @@ Skill routing: invoke the matching drupal-superpowers skill BEFORE the first inv
 - code touching access, permissions, routes, user data, output/Markup/Twig, queries, uploads, redirects → drupal-security
 - render output that varies by user, permissions, language, or query; stale or another user's data → drupal-cacheability
 - config/install, schema, sync, drift, cex/cim, config vs state → drupal-config
-- picking a contrib module or dependency, or before non-trivial custom code → drupal-contrib-research
+- any new feature or module, before writing custom code (does core or a contrib module already do it?), or picking a dependency → drupal-contrib-research
 - about to run drush/composer/phpunit/phpcs/phpstan, verify on a site, or use Drupal MCP tools → drupal-runtime-verification
 - reviewing a diff, module, or PR → drupal-code-review
 - about to say done, fixed, working, or passing → drupal-verification
-- core/PHP/Symfony upgrades, deprecations, Rector, contrib major bumps → drupal-upgrade"
+- core/PHP/Symfony upgrades, deprecations, Rector, contrib major bumps → drupal-upgrade
+- theme work: Twig templates, libraries.yml, Drupal.behaviors/once, preprocess, SDC components, CSS/JS, markup accessibility → drupal-frontend
+- slow page/route/Views/cron/queue, entity loads in loops, per-row queries, profiling, cache hit rate → drupal-performance
+- migration YAML, source/process/destination plugins, drush migrate:*, importing from Drupal 7/CSV/JSON/another DB → drupal-migrate-api"
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' "$(dsp_json quote "$ctx")"

@@ -5,7 +5,7 @@
 2. `<docroot>/core/phpunit.xml.dist` with `-c <docroot>/core` and the test path as argument.
 3. A `composer test` script or Makefile target that wraps the above (use it).
 
-Requires `drupal/core-dev` (profile field `packages.core_dev`); without it, `phpunit`, Mink, and the test base classes are absent — report NOT VERIFIED and suggest `composer require --dev drupal/core-dev:^<major.minor>` rather than installing it yourself on a shared project.
+Requires `drupal/core-dev` (profile field `packages.core_dev`); without it, `phpunit`, Mink, and the test base classes are absent — report NOT VERIFIED and suggest `composer require --dev drupal/core-dev:^<major.minor> --with-all-dependencies` (without `-W` Composer refuses because core-dev pins PHPUnit's dependencies differently from the locked ones; observed on a fresh 11.4 project) rather than installing it yourself on a shared project.
 
 ## Environment variables
 | Variable | Needed by | Example |

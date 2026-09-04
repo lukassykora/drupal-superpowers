@@ -1,0 +1,6 @@
+---
+type: "file_contains"
+path: "web/themes/custom/acme/templates/node--article--teaser.html.twig"
+pattern: "\\|raw"
+match: "not_contains"
+---

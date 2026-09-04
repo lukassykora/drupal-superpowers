@@ -1,0 +1,8 @@
+name: Partner migrate
+type: module
+description: Migrates partners from the legacy CSV export (fixture with a planted migration defects).
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:migrate
+  - migrate_source_csv:migrate_source_csv

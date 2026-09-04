@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# lab-seed <lab dir> [<module>...]: copy fixture custom modules into a real Drupal lab so integration
+# evals and manual Stage-8 checks run against real core, vendor, and a database.
+# Default modules: saved_items contact_note xss_notes greeting_block broken_service (from fixtures/site-current).
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+LAB=${1:-}; shift || true
+[ -n "$LAB" ] && [ -d "$LAB" ] || { echo "usage: lab-seed <lab dir> [modules...]"; exit 1; }
+DOCROOT=web; [ -d "$LAB/docroot" ] && DOCROOT=docroot
+mods=${*:-"saved_items contact_note xss_notes greeting_block broken_service"}
+mkdir -p "$LAB/$DOCROOT/modules/custom"
+for m in $mods; do
+  src="$ROOT/fixtures/site-current/$DOCROOT/modules/custom/$m"
+  [ -d "$src" ] || src="$ROOT/fixtures/site-previous/web/modules/custom/$m"
+  [ -d "$src" ] || { echo "no fixture module $m"; continue; }
+  rm -rf "$LAB/$DOCROOT/modules/custom/$m"
+  cp -R "$src" "$LAB/$DOCROOT/modules/custom/$m"
+  echo "seeded $m"
+done
+[ -f "$LAB/.drupal-superpowers-lab" ] || echo "note: $LAB has no .drupal-superpowers-lab marker; the guard will treat it as non-disposable"

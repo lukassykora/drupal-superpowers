@@ -1,0 +1,25 @@
+id: partner_nodes
+label: Partner nodes from CSV
+migration_group: partners
+source:
+  plugin: csv
+  path: modules/custom/partner_migrate/data/partners.csv
+  ids: [id]
+  header_row_count: 1
+process:
+  title: name
+  field_tier: tier
+  field_website: website
+  field_tags:
+    plugin: explode
+    source: tags
+    delimiter: ','
+  created:
+    plugin: format_date
+    from_format: 'Y-m-d H:i:s'
+    to_format: 'U'
+    source: created
+  uid: 1
+destination:
+  plugin: entity:node
+  default_bundle: partner

@@ -1,0 +1,4 @@
+id,name,tier,website,tags,created
+1,Acme Corp,gold,https://acme.example,"hosting, cloud",2014-03-01 10:00:00
+2,Globex,silver,globex.example,"consulting",2016-07-15 09:30:00
+3,Initech,,https://initech.example,"",2019-01-02 00:00:00

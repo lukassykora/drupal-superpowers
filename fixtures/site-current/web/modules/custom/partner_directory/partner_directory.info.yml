@@ -1,0 +1,8 @@
+name: Partner directory
+type: module
+description: Lists partner nodes with their tags (fixture with planted performance defects).
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:node
+  - drupal:taxonomy

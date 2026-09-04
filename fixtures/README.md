@@ -6,7 +6,7 @@ custom modules with **planted defects** documented in each fixture's README.
 
 | Fixture | Drupal | Purpose |
 |---|---|---|
-| `site-current` | 11.4.6 | current-class site; clean `saved_items`, `contact_note` form, planted `xss_notes`, `greeting_block`, `broken_service` |
+| `site-current` | 11.4.6 | current-class site; clean `saved_items`, `contact_note` form, planted `xss_notes`, `greeting_block`, `broken_service`, `partner_directory` (N+1), `partner_migrate` (migration YAML), theme `acme` (Twig/JS/a11y defects, SDC) |
 | `site-ddev` | 11.4.6 | same shape with `.ddev/config.yaml`; runtime adapter must choose DDEV |
 | `site-prodlike` | 11.4.6 | non-local database and trusted hosts; must classify UNKNOWN/PRODUCTION |
 | `site-mcp` | 11.4.6 | project `.mcp.json` wired to `mcp-stub/` |

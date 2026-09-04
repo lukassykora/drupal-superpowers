@@ -1,6 +1,6 @@
 {
   "name": "drupal-superpowers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Disciplined Drupal engineering for Claude Code: project and version detection, Drupal-native design, security and cacheability by default, tests as evidence, runtime verification, and a completion gate. Works standalone or alongside Superpowers.",
   "author": {
     "name": "Lukáš Sýkora"

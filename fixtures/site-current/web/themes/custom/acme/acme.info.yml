@@ -1,0 +1,11 @@
+name: Acme
+type: theme
+description: Site theme (fixture with planted frontend defects).
+core_version_requirement: ^11
+base theme: stark
+libraries:
+  - acme/global
+regions:
+  header: Header
+  content: Content
+  footer: Footer

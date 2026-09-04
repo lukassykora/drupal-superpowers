@@ -42,7 +42,8 @@ echo "## 1. Installed core source (authority: highest)"
 if [ -d "$CORE/lib" ]; then
   case "$KIND" in
     service)
-      grep -rn --include='*.services.yml' -E "^  ${short}:" "$CORE" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||" || true
+      hits=$(grep -rn --include='*.services.yml' -E "^  ${short}:" "$CORE" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||")
+      if [ -n "$hits" ]; then echo "$hits"; else echo "NO SERVICE '${short}' defined in installed core ${VERSION:-?} *.services.yml (contrib/custom services live under modules/, not searched here)."; fi
       grep -rln --include='*.services.yml' -E "^  ${short}:" "$CORE" 2>/dev/null | head -1 | xargs -I{} sh -c "awk '/^  ${short}:/{f=1} f&&/^  [a-z_.]+:/&&!/^  ${short}:/{exit} f' '{}' | head -12" 2>/dev/null || true
       ;;
     hook)
@@ -51,7 +52,8 @@ if [ -d "$CORE/lib" ]; then
     pattern)
       echo "(see ## 4 pattern index)";;
     *)
-      grep -rn --include='*.php' --include='*.module' --include='*.inc' -E "(function|class|interface|trait|const) +${short}\b" "$CORE/lib" "$CORE/modules" "$CORE/includes" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||" || true
+      hits=$(grep -rn --include='*.php' --include='*.module' --include='*.inc' -E "(function|class|interface|trait|const) +${short}\b" "$CORE/lib" "$CORE/modules" "$CORE/includes" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||")
+      if [ -n "$hits" ]; then echo "$hits"; else echo "NO DEFINITION of '${short}' in installed core ${VERSION:-?} (searched core/lib, core/modules, core/includes). If a caller expects it, it does not exist in this version."; fi
       dep=$(grep -rn --include='*.php' --include='*.inc' -B8 -E "(function|class) +${short}\b" "$CORE/lib" "$CORE/modules" "$CORE/includes" 2>/dev/null | grep -E '@deprecated|trigger_error|E_USER_DEPRECATED' | head -3 | sed "s|$ROOT/||")
       [ -n "$dep" ] && { echo "DEPRECATION NOTICE FOUND:"; echo "$dep"; }
       ;;

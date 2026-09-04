@@ -1,0 +1,7 @@
+partner_directory.list:
+  path: '/partners'
+  defaults:
+    _controller: 'Drupal\partner_directory\Controller\PartnerListController::list'
+    _title: 'Partners'
+  requirements:
+    _permission: 'access content'

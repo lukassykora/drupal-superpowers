@@ -3,7 +3,7 @@ name: trigger-drupal-architecture
 tags: [drupal-architecture]
 fixture: site-current
 runs: 2
-max_turns: 8
+max_turns: 14
 timeout_seconds: 300
 ---
 

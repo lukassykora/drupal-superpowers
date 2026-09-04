@@ -64,7 +64,7 @@ def load_cases(groups, names, tags):
 
 def run_claude(prompt, cwd, plugin_dir, max_turns, timeout, model, with_user_settings, env_extra):
     cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose",
-           "--max-turns", str(max_turns), "--dangerously-skip-permissions", "--no-session-persistence"]
+           "--max-turns", str(max_turns), "--dangerously-skip-permissions"]  # sessions persist so Stop hooks can read the transcript
     if plugin_dir:
         cmd += ["--plugin-dir", plugin_dir]
     if not with_user_settings:
@@ -88,7 +88,7 @@ def run_claude(prompt, cwd, plugin_dir, max_turns, timeout, model, with_user_set
 
 
 def parse_stream(stdout):
-    tools, texts, skills = [], [], []
+    tools, texts, skills, results = [], [], [], []
     for line in stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -97,6 +97,13 @@ def parse_stream(stdout):
             ev = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if ev.get("type") == "user":
+            for c in (ev.get("message") or {}).get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "tool_result":
+                    content = c.get("content")
+                    if isinstance(content, list):
+                        content = "\n".join(x.get("text", "") for x in content if isinstance(x, dict))
+                    results.append(str(content or "")[:1200])
         if ev.get("type") == "assistant":
             for c in (ev.get("message") or {}).get("content") or []:
                 if c.get("type") == "tool_use":
@@ -108,7 +115,7 @@ def parse_stream(stdout):
         elif ev.get("type") == "result" and ev.get("result"):
             texts.append(ev["result"])
     final = texts[-1] if texts else ""
-    return {"tools": tools, "final": final, "all_text": "\n".join(texts), "skills": skills}
+    return {"tools": tools, "final": final, "all_text": "\n".join(texts), "skills": skills, "results": results}
 
 
 def grade(g, parsed, cwd, llm_ok, model):
@@ -128,7 +135,8 @@ def grade(g, parsed, cwd, llm_ok, model):
         return ok, f"{n} matching call(s) (min={lo}, max={hi})"
     if t == "regex":
         flags = re.I if "i" in (g.get("flags") or "") else 0
-        hay = parsed["all_text"] if g.get("scope") == "all" else parsed["final"]
+        scope = g.get("scope")
+        hay = parsed["final"] if not scope else (parsed["all_text"] if scope == "all" else parsed["all_text"] + "\n" + "\n".join(parsed["results"]))
         found = re.search(g["pattern"], hay, flags | re.S) is not None
         want = g.get("match", "contains") == "contains"
         return found == want, f"pattern {'found' if found else 'not found'} in {'transcript' if g.get('scope') == 'all' else 'final message'} (want {'present' if want else 'absent'})"
@@ -152,10 +160,17 @@ def grade(g, parsed, cwd, llm_ok, model):
     if t == "llm":
         if not llm_ok:
             return None, "skipped (--no-llm)"
-        transcript = json.dumps({"tool_calls": [{"name": c["name"], "input": json.dumps(c["input"])[:600]} for c in parsed["tools"]],
-                                 "assistant_text": parsed["all_text"][-12000:]}, indent=1)
+        calls = []
+        for i, c in enumerate(parsed["tools"]):
+            entry = {"name": c["name"], "input": json.dumps(c["input"])[:600]}
+            if i < len(parsed["results"]):
+                entry["result"] = parsed["results"][i]
+            calls.append(entry)
+        transcript = json.dumps({"tool_calls_with_results": calls[-60:],
+                                 "assistant_text": parsed["all_text"][-12000:]}, indent=1)[-60000:]
         judge_prompt = ("You are grading an AI coding agent's transcript against strict criteria. Answer with exactly one line: "
-                        "PASS or FAIL, then a colon and one sentence of reason. Do not be lenient: every clause of the criteria must hold.\n\n"
+                        "PASS or FAIL, then a colon and one sentence of reason. Do not be lenient: every clause of the criteria must hold. "
+                        "Tool results are included (truncated to 1200 chars each); treat them as the evidence of what really ran.\n\n"
                         f"CRITERIA:\n{g['_criteria']}\n\nTRANSCRIPT (tool calls, then assistant text):\n{transcript}")
         r = run_claude(judge_prompt, cwd=ROOT, plugin_dir=None, max_turns=1, timeout=180, model=model or "sonnet",
                        with_user_settings=False, env_extra={})
@@ -199,11 +214,22 @@ def main():
         for i in range(runs):
             tmp = tempfile.mkdtemp(prefix="dsp-eval-")
             fixture = c["fm"].get("fixture")
-            cwd = os.path.join(tmp, "project")
-            if fixture:
-                shutil.copytree(os.path.join(FIXTURES, fixture), cwd)
+            project_env = c["fm"].get("project_env")
+            if project_env:
+                cwd = os.environ.get(project_env, "")
+                if not cwd or not os.path.isdir(cwd):
+                    print(f"[SKIP] {label}: env {project_env} not set or not a directory", flush=True)
+                    shutil.rmtree(tmp, ignore_errors=True)
+                    continue
+                reset = c["fm"].get("reset_script")
+                if reset:
+                    subprocess.run(["bash", "-c", reset], cwd=cwd, capture_output=True)
             else:
-                os.makedirs(cwd)
+                cwd = os.path.join(tmp, "project")
+                if fixture:
+                    shutil.copytree(os.path.join(FIXTURES, fixture), cwd)
+                else:
+                    os.makedirs(cwd)
             r = run_claude(c["prompt"], cwd, None if a.baseline else a.plugin_dir, int(c["fm"].get("max_turns", 10)),
                            int(c["fm"].get("timeout_seconds", 300)), a.model, a.with_user_settings,
                            {"DRUPAL_SP_FIXTURES": FIXTURES})
@@ -237,6 +263,8 @@ def main():
                   + (f" premature={premature}" if premature else ""), flush=True)
             if not a.keep_temp:
                 shutil.rmtree(tmp, ignore_errors=True)
+            if project_env and c["fm"].get("reset_script"):
+                subprocess.run(["bash", "-c", c["fm"]["reset_script"]], cwd=cwd, capture_output=True)
         results.append(case_res)
     if a.dry_run:
         return 0

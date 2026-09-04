@@ -7,4 +7,4 @@ image installs the needed extensions on first start (slow the first time; use a 
 
 The lab recipe (`skills/drupal-runtime-verification/references/disposable-lab.md`) copies this directory,
 writes the `.drupal-superpowers-lab` marker, and runs Composer/Drush through `docker compose exec php`.
-Nothing here touches the user's project.
+Nothing here touches the user's project. The site is published on `http://localhost:${DSP_WEB_PORT:-8480}`; pick a free port with `DSP_WEB_PORT` (Docker fails silently to reach a Drupal on a port another container already owns, found in Stage 8).

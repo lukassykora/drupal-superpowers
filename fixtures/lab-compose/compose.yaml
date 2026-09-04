@@ -1,16 +1,38 @@
 # Disposable Drupal lab (Docker Compose). Copied by the lab recipe into ${CLAUDE_PLUGIN_DATA}/labs/<name>.
+# First start installs PHP extensions and Composer inside the php service (1–3 min); later starts are fast
+# because the container is reused. Set DSP_PHP_IMAGE to a prebuilt image to skip that.
 # Usage:  docker compose up -d && docker compose exec php composer create-project drupal/recommended-project:^11.4 . --no-interaction
-#         docker compose exec php composer require --dev drupal/core-dev:^11.4 drush/drush:^13
+#         docker compose exec php composer require --dev drupal/core-dev:^11.4 --with-all-dependencies && composer require drush/drush:^13
 #         docker compose exec php vendor/bin/drush site:install minimal -y --db-url=mysql://drupal:drupal@db/drupal --account-pass=admin
 # Teardown: docker compose down -v
+x-php-setup: &php-setup |
+  set -e
+  if ! php -m | grep -qi pdo_mysql; then
+    apt-get update -qq >/dev/null
+    apt-get install -y -qq git unzip libpng-dev libjpeg-dev libwebp-dev libzip-dev libonig-dev >/dev/null
+    docker-php-ext-configure gd --with-jpeg --with-webp >/dev/null
+    docker-php-ext-install -j"$(nproc)" pdo_mysql gd zip opcache >/dev/null
+  fi
+  if ! command -v composer >/dev/null; then
+    php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+    php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer --quiet
+  fi
+  touch /tmp/.dsp-ready
+
 services:
   php:
     image: ${DSP_PHP_IMAGE:-php:8.3-cli}
     working_dir: /app
     volumes:
       - ./:/app
-    command: ["sh", "-c", "docker-php-ext-install pdo_mysql gd zip opcache >/dev/null 2>&1 || true; tail -f /dev/null"]
+    command: ["sh", "-c", "sh -c \"$$DSP_SETUP\" && tail -f /dev/null"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/.dsp-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
     environment:
+      DSP_SETUP: *php-setup
       COMPOSER_ALLOW_SUPERUSER: "1"
       SIMPLETEST_DB: mysql://drupal:drupal@db/drupal
       SIMPLETEST_BASE_URL: http://web
@@ -18,13 +40,16 @@ services:
     depends_on:
       - db
   web:
+    # Same image and the same extension setup as php (a bare php:8.3-cli has no pdo_mysql → HTTP 500).
     image: ${DSP_PHP_IMAGE:-php:8.3-cli}
     working_dir: /app/web
     volumes:
       - ./:/app
-    command: ["php", "-S", "0.0.0.0:80", ".ht.router.php"]
+    environment:
+      DSP_SETUP: *php-setup
+    command: ["sh", "-c", "sh -c \"$$DSP_SETUP\" && while [ ! -f /app/web/index.php ]; do sleep 2; done; php -S 0.0.0.0:80 .ht.router.php"]
     ports:
-      - "${DSP_WEB_PORT:-8090}:80"
+      - "${DSP_WEB_PORT:-8480}:80"
     depends_on:
       - db
   db:
@@ -36,5 +61,10 @@ services:
       MARIADB_ROOT_PASSWORD: root
     volumes:
       - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 volumes:
   dbdata: {}

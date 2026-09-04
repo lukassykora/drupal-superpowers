@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Preprocess functions for Acme (fixture).
+ */
+
+/**
+ * Implements hook_preprocess_HOOK() for node templates.
+ */
+function acme_preprocess_node(array &$variables): void {
+  $node = $variables['node'];
+  $variables['author_name'] = $node->getOwner()->getDisplayName();
+  $variables['read_time'] = \Drupal::service('acme.read_time')->forNode($node);
+}
