@@ -235,6 +235,21 @@ Harness changes from this sweep, all covered by `scripts/validate`:
 
 The Drupal-specific claims in the skill's references are cited to drupal.org projects and issues. Two aggregation claims were established by **running core 11.x's own regexes** rather than by reading a bug report, because no bug report exists: `@layer`, `@property`, `oklch()`, `color-mix()` and `calc()` pass through the optimizer untouched; a layered `@import` is not inlined ([#3470829](https://www.drupal.org/project/drupal/issues/3470829)) but *is* hoisted to the top of the aggregate by `CssCollectionOptimizerLazy::optimizeGroup()`, where its relative path no longer resolves.
 
+### Closing the last unmeasured groups (2026-09-04, late)
+
+The `agents` group had **never been run** since it was written in Stage 4; `acceptance` had not been re-run since the guard and Stop-hook rewrites. Both were run now:
+
+| Group | Result |
+|---|---|
+| `acceptance` (5 cases) | **5/5 PASS** — 01 saved-items endpoint (224 s), 02 previous-user data (142 s), 03 upgrade 10→11 (354 s), 04 form validation without Docker (119 s), 05 MCP introspection (92 s) |
+| `agents` (2 cases) | **2/2 PASS** — no subagent for a trivial label change (32 s); at most one research agent, with the core path named (236 s) |
+
+`agents/no-duplicate-research` failed its first run at `max_turns: 8`: the fixture deliberately has no core on disk, so the research skill falls back to online sources, and the run was cut off mid-search with the final message "Core isn't installed on disk here … I'll fall back to authoritative online sources". The grader was measuring the budget, not the behaviour. Raised to 20 turns / 600 s; the re-run passes both graders, including "at most one agent spawned".
+
+Still open after this pass: 17 of the 21 scenarios last passed **before** today's hook rewrites and model-routing change, and the 7 `integration` cases need a rebuilt Drupal 11 lab (`scripts/drupal-lab create`) because the previous one was torn down. Neither is a known failure; both are unverified against the current tree.
+
+Always-loaded context cost after the Tailwind addition (skill and agent frontmatter, which is what enters every session): 21 skills ≈ 1543 tokens, 9 agents ≈ 743 tokens, plus a ≈ 998-token session brief in a Drupal repo.
+
 ## 9. CI mapping
 
 | Job | Command | When |
