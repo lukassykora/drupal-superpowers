@@ -4,6 +4,7 @@ description: Implements and verifies Drupal theme and front-end work in isolatio
 model: sonnet
 skills:
   - drupal-superpowers:drupal-frontend
+  - drupal-superpowers:drupal-tailwind
   - drupal-superpowers:drupal-cacheability
   - drupal-superpowers:drupal-runtime-verification
 effort: high
@@ -16,9 +17,10 @@ Rules:
 - Escaping and access are not negotiable: no `|raw` on data, no inline handlers, `{{ content.field }}` over raw field values.
 - Cacheability: anything fetched in preprocess gets `#cache` metadata; personalized fragments become lazy builders (coordinate with the module).
 - Accessibility: keyboard operability, labels, alt text, focus, contrast per the skill's checklist; check the accessibility tree when a browser tool is available.
-- Build: run the project's build step (`npm run build` or equivalent) through the resolved runtime when sources changed; never commit built artifacts unless the project does.
+- Build: run the project's build step (`npm run build` or equivalent) through the resolved runtime when sources changed; never commit built artifacts unless the project does. When the theme uses Tailwind, follow the `drupal-tailwind` skill and prove the classes you rely on exist in the compiled CSS; hand a large Tailwind pipeline task to `drupal-tailwind-specialist` instead.
 - Verification: `drush cr` for registry changes, Twig lint, then a browser pass on LOCAL/DISPOSABLE (console errors, network failures, behaviour re-attach after AJAX, keyboard walk, cache headers). Record `VERIFY` lines; browser evidence supplements, never replaces, PHPUnit for behaviour in modules.
 - Scope: theme and assets only; module logic changes go back to the caller as findings.
+- Git is the user's: never `git add`/`commit`/`push`/`rebase`; list the changed paths in the report so the caller can hand them over.
 
 Report (≤ 40 lines), then stop:
 ```

@@ -20,7 +20,7 @@ Anything not provably local is `UNKNOWN`. The classification is recomputed per c
 Blocks with exit 2 and a reason, outside `DISPOSABLE`:
 
 - `drush sql:drop`, `sql-drop`, `site:install` / `si`, `sql:sync`, `entity:delete`, `pm:uninstall`, `user:password`
-- `drush cim -y` / `config:import -y` (the preview form `cim --preview=diff` is allowed)
+- every `drush cim` / `config:import` form except the ones that cannot commit (`--no` / `--simulate` without `-y`); non-interactive shells auto-confirm the prompt, so `-y` is not required for the import to run
 - destructive SQL through `drush sql:query` / `sql:cli` (`DROP`, `DELETE`/`TRUNCATE` without a `WHERE`)
 - `DROP TABLE/DATABASE`, `DELETE FROM x;`/`TRUNCATE` without restriction
 - `rm -rf` on the project root, `/`, `~`, `.`, or `*`
@@ -33,7 +33,7 @@ The guard cannot see conversational approval. When the user has explicitly appro
 
 Limits: the guard inspects the command string; obfuscated or multi-step destructive actions (a script file that drops tables) are not caught. Skills instruct Claude to announce every state-changing command on non-local environments regardless of the guard.
 
-The Stop hook (`stop-gate`) never blocks destructively: it asks once for a verification report when Drupal files changed without one, and exits silently when `stop_hook_active` is set.
+The Stop hook (`stop-gate`) never blocks destructively: it asks once for a verification report when Drupal files changed without one, exits silently when `stop_hook_active` is set, and is inert outside a Drupal project.
 
 ## 3. Agents and least privilege
 
@@ -57,7 +57,7 @@ The Stop hook (`stop-gate`) never blocks destructively: it asks once for a verif
 
 ## 6. Git and repository
 
-- No `git commit`, `push`, `reset`, `clean`, `rebase`, or branch changes unless the user asked for exactly that; the guard blocks the destructive forms.
+- Git belongs to the user. No `git add`, `commit`, `push`, `merge`, `rebase`, `tag`, `branch`, `switch`, or `stash` unless the user asked for that exact operation, and a request for one of them does not authorise the next (commit ≠ push). The guard hook denies the destructive forms (`reset --hard`, `clean -f`, force push) outright; the rest is enforced by the skills, which end every file-changing task with a git handoff the user can paste (`drupal-verification/references/git-handoff.md`).
 - The repository is the source of truth for code; MCP/Drush are for introspection and verification.
 
 ## 7. Supply chain of the plugin itself

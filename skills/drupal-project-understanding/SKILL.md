@@ -30,7 +30,8 @@ When not to use: pure documentation edits, or a follow-up task in a session wher
 2. Read the router line. `current` → modern APIs; `previous` → only APIs present in that minor (check with `drupal-facts check <id> <version>`); `eol` → legacy mode, say so once, do not modernize unrequested; `dev` → treat facts as unverified until confirmed in installed core.
 3. Fill the gaps the scripts cannot see by reading, not guessing: project `CLAUDE.md`/`README`, the CI file, `composer.json` scripts, `.ddev/config.yaml`, `settings*.php` (never print secrets).
 4. If the task needs runtime facts (enabled modules, entity types, fields, config drift), get them from the site through the resolved `drush` command with `--format=json`, or read-only MCP tools if present (see `drupal-runtime-verification`). Never from memory.
-5. State the profile in five lines or fewer before continuing: version + class, runtime + environment class, custom code paths, test/lint commands, notable features (multilingual, moderation, config split, patches).
+5. When the user asks for an onboarding, handover, or audit document rather than a task, produce the report in [references/architecture-report.md](references/architecture-report.md) instead of step 6.
+6. State the profile in five lines or fewer before continuing: version + class, runtime + environment class, custom code paths, test/lint commands, notable features (multilingual, moderation, config split, patches).
 
 ## Decision rules
 

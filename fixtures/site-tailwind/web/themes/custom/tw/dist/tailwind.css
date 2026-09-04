@@ -1,0 +1,5 @@
+/* Stub standing in for compiled output. Note which classes are present. */
+.flex{display:flex}
+.badge{display:inline-flex;align-items:center}
+.text-brand{color:var(--color-brand)}
+.p-4{padding:1rem}

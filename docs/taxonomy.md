@@ -65,10 +65,18 @@ Bash for read-only agents is restricted by instruction to read-only commands (`g
 |---|---|
 | `drupal-frontend` | Use when working in a Drupal theme or on front-end output: Twig templates, *.libraries.yml, Drupal.behaviors and once(), preprocess functions, theme suggestions, Single Directory Components, CSS/JS assets, or accessibility of rendered markup; and when reviewing theme code. |
 | `drupal-performance` | Use when a Drupal page, route, Views listing, cron, queue, or migration is slow or memory-heavy, when code loads entities in loops (N+1), runs queries per row, calls external APIs in requests, or when asked to profile, benchmark, or review Drupal performance and cache hit rates. |
-| `drupal-hard-problem` | Use when a Drupal architecture decision or debugging investigation has proven unusually hard: two or more falsified hypotheses, an intermittent or environment-dependent bug, a cross-module data-model or migration redesign, a cache/access interaction nobody can explain, or the user says the problem is hard; not for routine features, fixes, or first debugging passes. |
+| `drupal-hard-problem` | Use when a Drupal debugging investigation has proven unusually hard: two or more falsified hypotheses, an intermittent or environment-dependent bug, a cache/access/revision interaction nobody can explain, or an architecture decision drupal-architecture could not settle, or the user says the problem is hard; not for routine features, fixes, or first debugging passes. |
 | `drupal-migrate-api` | Use when writing or debugging Drupal migrations with the Migrate API: migration YAML, source, process, and destination plugins, migrate_plus/migrate_tools, drush migrate:import/status/rollback, id maps and high-water marks, or moving content from Drupal 7, CSV, JSON, or another database into Drupal; not for core version upgrades. |
 
 Agents: `drupal-legacy-archaeologist` (read-only inventory of D7/8/9 code, never rewrites), `drupal-frontend-specialist` (theme work with browser verification), `drupal-performance-reviewer` (read-only measurements and ranked hotspots). Contribution mode (contrib module / core) is a reference of `drupal-project-understanding`, not a skill.
+
+## 4d. Tailwind addition (2026-09-04)
+
+| name | description |
+|---|---|
+| `drupal-tailwind` | Use when a Drupal theme uses Tailwind CSS: setting it up, wiring the build into the theme and *.libraries.yml, choosing @source globs so Twig, SDC components and preprocess classes are found, safelisting classes Twig builds by concatenation, keeping Preflight out of the admin UI and CKEditor, or migrating a theme from Tailwind 3 to 4. |
+
+Agent: `drupal-tailwind-specialist` (Tailwind pipeline in isolation: source globs, safelists, build wiring, Preflight vs the admin UI, v3→v4). `drupal-frontend-specialist` preloads the skill for ordinary theme work and hands large pipeline tasks over.
 
 ## 4c. Model routing (2026-09-04)
 
@@ -76,12 +84,12 @@ Per the Claude Code model guidance (planning/architecture → Opus or Fable at `
 
 | Component | model | effort | Why |
 |---|---|---|---|
-| everyday skills (workflow, project-understanding, research, module-development, testing, config, contrib-research, runtime-verification, verification, cacheability, frontend, migrate-api, setup-mcp) | inherit (session) | inherit | the user's daily model, typically `sonnet` or `opusplan` |
+| everyday skills (workflow, project-understanding, research, module-development, testing, config, contrib-research, runtime-verification, verification, cacheability, frontend, tailwind, migrate-api, setup-mcp) | inherit (session) | inherit | the user's daily model, typically `sonnet` or `opusplan` |
 | `drupal-architecture` | `fable` | `xhigh` | architectural-class design and brainstorming for the rest of the turn; bounded work reads the decision tables without invoking it |
 | `drupal-debugging`, `drupal-code-review`, `drupal-security`, `drupal-upgrade`, `drupal-performance` | `opus` | `high` | reasoning-heavy, mistakes are expensive |
 | `drupal-hard-problem` (new) | `fable` | `xhigh` | debugging escalation after two falsified hypotheses, intermittent bugs, or a design `drupal-architecture` could not settle |
 | agents `drupal-researcher`, `drupal-test-engineer` | `sonnet` | `medium` | read/grep and run/parse work |
-| agent `drupal-frontend-specialist` | `sonnet` | `high` | implementation |
+| agents `drupal-frontend-specialist`, `drupal-tailwind-specialist` | `sonnet` | `high` | implementation |
 | agents `drupal-code-reviewer`, `drupal-security-reviewer`, `drupal-performance-reviewer`, `drupal-upgrade-specialist`, `drupal-legacy-archaeologist` | `opus` | `high` | independent judgement |
 
 A skill's `model:` applies for the rest of the turn only; the session model resumes on the next prompt. Users override any agent by shipping a same-named agent in `.claude/agents/` or `~/.claude/agents/`, and can pin all subagents with `CLAUDE_CODE_SUBAGENT_MODEL(_FORCE)`. Values excluded by an organisation's `availableModels` fall back per Claude Code's rules.

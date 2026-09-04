@@ -2,7 +2,7 @@
 fixture: site-current
 runs: 1
 max_turns: 12
-timeout_seconds: 300
+timeout_seconds: 600
 tags: [drupal-frontend]
 ---
 

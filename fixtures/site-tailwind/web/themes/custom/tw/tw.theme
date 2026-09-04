@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Theme functions for the TW theme.
+ */
+
+/**
+ * Implements hook_preprocess_HOOK() for node templates.
+ */
+function tw_preprocess_node(array &$variables): void {
+  if (($variables['node']?->bundle() ?? '') === 'article') {
+    $variables['attributes']['class'][] = 'ring-2';
+    $variables['attributes']['class'][] = 'ring-brand';
+  }
+}

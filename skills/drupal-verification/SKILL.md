@@ -35,9 +35,15 @@ user-invocable: true
    - Browser: NOT APPLICABLE — JSON endpoint
 
    Deployment: none (no schema/config change)
+
+   To commit (your call, nothing was staged):
+     git add web/modules/custom/x/x.routing.yml web/modules/custom/x/src/Controller/FooController.php web/modules/custom/x/tests/src/Kernel/FooTest.php
+     git commit -m "Add …"
+   Not included on purpose: config/sync/*.yml (run `drush cex` first if the permission change should deploy).
    ```
 5. If any applicable gate is `FAIL`, the task is not done; say what fails and stop or fix.
-6. Report side findings (unrelated problems noticed) in a separate short list; do not fix them unrequested.
+6. **Hand git back to the user** ([references/git-handoff.md](references/git-handoff.md)): nothing is staged, committed, pushed, merged, rebased, or branched unless the user asked for that exact operation. End the report with the `git add`/`git commit` lines the user can paste, a message in the project's style, and what you deliberately left out.
+7. Report side findings (unrelated problems noticed) in a separate short list; do not fix them unrequested.
 
 ## Decision rules
 
@@ -58,3 +64,5 @@ user-invocable: true
 | "The user can run it on their side" | Fine, and the report must say it was not run here. |
 | "phpstan is noisy on this project, skip it" | Report FAIL or NOT VERIFIED with the reason; never silently skip. |
 | "It's a one-liner, no report" | A two-line report still names what ran. |
+| "I'll just commit it, the change is obviously right" | Git is the user's. Print the commit command; let them run it. |
+| "They said commit, so I'll push too" | Commit means commit. Pushing, tagging, and PRs are separate requests. |

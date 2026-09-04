@@ -98,7 +98,7 @@ PY
 # for a Composer site the docroot (web/) is inside the real root.
 dsp_find_root() {
   local dir core_candidate=""
-  dir=$(cd "${1:-.}" 2>/dev/null && pwd) || { echo "none $(pwd)"; return; }
+  dir=$(cd "${1:-.}" 2>/dev/null && pwd) || { echo "none ${1:-.}"; return; }
   while :; do
     if [ -f "$dir/composer.lock" ] && grep -q '"name": *"drupal/core"' "$dir/composer.lock" 2>/dev/null; then echo "composer $dir"; return; fi
     if [ -f "$dir/composer.json" ] && grep -Eq '"drupal/(core|core-recommended|core-composer-scaffold)"' "$dir/composer.json" 2>/dev/null; then echo "composer $dir"; return; fi
@@ -109,7 +109,7 @@ dsp_find_root() {
     dir=$(dirname "$dir")
   done
   if [ -n "$core_candidate" ]; then echo "core $core_candidate"; return; fi
-  echo "none $(pwd)"
+  echo "none $(cd "${1:-.}" 2>/dev/null && pwd || printf %s "${1:-.}")"
 }
 
 # Docroot relative to composer root, or "." when not found.

@@ -15,6 +15,6 @@ Fill every `<...>` from `drupal-profile` / `drupal-runtime` output. Copy verbati
 - Tests: <level> tests under `tests/src/<Level>/`; bugfixes start with a failing regression test; test command `<cmd>`; no assertions removed or weakened to pass.
 - Deployment: changes needing `drush updb`, `drush cim`, cache rebuild, or reindexing are listed in the task report.
 - Verification report format: `VERIFY L1|L2|L3 <check> PASS|FAIL|NOT VERIFIED — <reason>`; no completion claim without it.
-- Git: no commits, pushes, resets by agents unless the user asked for exactly that.
+- Git belongs to the user: no `git add`, `commit`, `push`, `merge`, `rebase`, `tag`, `branch`, `switch`, `stash` or `reset` by any agent unless the user asked for that exact operation. Every task that changes files ends with the `git add`/`git commit` commands the user can paste, in the project's message style, plus what was deliberately left out. Destructive git (`reset --hard`, `clean -f`, force push) never, even on request.
 - Language: all code, machine names (modules, fields, config keys, routes, services, permissions), identifiers, comments, docblocks, YAML labels/descriptions, test names, commit-ready text, and reports are written in English, whatever language the conversation uses. User-facing strings are English inside t()/TranslatableMarkup/{% trans %} so translations come from Drupal's translation system, never hard-coded in another language.
 ```

@@ -16,7 +16,7 @@ Rules:
 - Facts about the current and target versions come from `"${CLAUDE_PLUGIN_ROOT}/scripts/drupal-profile"`, `drupal-facts`, `drupal-lookup`, and change records; replacement APIs are verified in a target-version core (project checkout, `composer create-project` in a temp dir, or a disposable lab), never from memory.
 - Rector/Upgrade Status output is reviewed hunk by hunk; every applied change is covered by a test run.
 - Composer changes are bounded (`require`/`update` with named packages, `--dry-run` first); you never loosen constraints or add `composer-drupal-lenient` without writing the risk into the report.
-- Nothing destructive on environments that are not DISPOSABLE/LOCAL; the guard hook applies. No git commits unless the task says so.
+- Nothing destructive on environments that are not DISPOSABLE/LOCAL; the guard hook applies. Git is the user's: never `git add`/`commit`/`push`/`rebase`; list the changed paths in the report instead.
 - Procedural hooks are not converted to `#[Hook]` unless that is the task; scope stays the upgrade.
 
 Report (≤ 60 lines), then stop:

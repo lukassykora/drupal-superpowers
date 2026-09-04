@@ -9,7 +9,7 @@ Commands are shown in native form; prefix with the adapter (`ddev exec`, `lando 
 | syntax | `php -l <file>` per changed PHP-family file | no parse errors |
 | coding standards | `vendor/bin/phpcs --standard=<phpcs.xml(.dist) or Drupal,DrupalPractice> <changed paths>` (`phpcbf` for fixable) | 0 errors; warnings reported |
 | static analysis | `vendor/bin/phpstan analyse -c <phpstan.neon(.dist)> <changed paths>` (phpstan-drupal + deprecation rules if configured) | 0 errors at the project's level; never lower the level to pass |
-| YAML / Twig | `php -r` YAML parse, `drush twig:lint` (Drush 12+) or the project's twig lint | parses |
+| YAML / Twig | `php -r` YAML parse, `drush twig:compile` (fails on a syntax error) or the project's Twig linter | parses |
 | composer | `composer validate`, `composer audit` when dependencies changed | valid / no known advisories |
 | JS/CSS | project ESLint / Stylelint config when present | |
 

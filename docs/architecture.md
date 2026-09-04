@@ -57,7 +57,8 @@ drupal-superpowers/
 │   ├── drupal-code-review/             SKILL.md, references/review-lens.md
 │   ├── drupal-verification/            SKILL.md, references/gate-matrix.md
 │   ├── drupal-upgrade/                 SKILL.md, references/{workflow,tooling,version-jumps}.md
-│   └── drupal-setup-mcp/               SKILL.md, references/templates/{mcp-tools,mcp-server,drush-mcp}.json
+│   ├── drupal-setup-mcp/               SKILL.md, references/templates/{mcp-tools,mcp-server,drush-mcp}.json
+│   └── drupal-tailwind/                SKILL.md, references/{setup,class-detection,drupal-integration}.md
 ├── agents/
 │   ├── drupal-researcher.md            read-only
 │   ├── drupal-security-reviewer.md     read-only
@@ -66,6 +67,7 @@ drupal-superpowers/
 │   ├── drupal-upgrade-specialist.md
 │   ├── drupal-legacy-archaeologist.md  read-only (Phase 2)
 │   ├── drupal-frontend-specialist.md   (Phase 2)
+│   ├── drupal-tailwind-specialist.md   (Phase 2+)
 │   └── drupal-performance-reviewer.md  read-only (Phase 2)
 ├── hooks/
 │   ├── hooks.json
@@ -77,6 +79,7 @@ drupal-superpowers/
 │   ├── drupal-facts                    → version-gated fact registry query
 │   ├── run-evals                       → eval runner fallback (D9)
 │   ├── lab-seed                        → copy fixture modules into a real lab (Stage 8)
+│   ├── drupal-lab                      → create/list/destroy disposable labs; `matrix` builds one per core
 │   └── validate                        → CI: plugin validate --strict + link check + frontmatter lint + staleness
 ├── references/
 │   ├── versions/matrix.md              dated support matrix (frontmatter: verified_against, last_reviewed, sources)
@@ -238,7 +241,7 @@ VERIFY L3 http    NOT VERIFIED  no runnable environment (adapter=none)
 | Changed | L1 | L2 | Security | Access | Cacheability | L3 |
 |---|---|---|---|---|---|---|
 | `*.md`, docs | — | — | — | — | — | — |
-| `*.yml` config/schema | lint, schema | `drush cim --preview`/kernel test | if permissions | if permissions | — | optional |
+| `*.yml` config/schema | lint, schema | `drush cim --diff --no`/kernel test | if permissions | if permissions | — | optional |
 | PHP in `src/Controller|Form|Plugin|EventSubscriber` | phpcs, phpstan | kernel/functional | yes | yes if entity/user data | yes if render/response | if adapter |
 | Twig / libraries | twig lint | functional-js optional | escaping | — | yes | browser if available |
 | `.install` / `post_update` | phpcs | `drush updb` on runtime or kernel | — | — | — | if adapter |
@@ -308,6 +311,7 @@ Common rules (from the writing-skills findings): frontmatter `name` + `descripti
 | `drupal-frontend` | P2 | Twig, libraries, behaviors/once, preprocess, theme suggestions, SDC, accessibility | `**/themes/**`, `*.twig`, `*.libraries.yml` | no | |
 | `drupal-performance` | P2 | N+1 loads, slow queries, cache hit/miss, render pipeline profiling | — | no | |
 | `drupal-migrate-api` | P2 | migration YAML, source/process/destination plugins, D7 content migration | `**/migrations/**` | no | |
+| `drupal-tailwind` | P2+ | Tailwind in a theme: source globs for Twig/SDC/preprocess, safelists for render-time classes, build + libraries wiring, Preflight vs admin/CKEditor, v3→v4 | `**/tailwind.config.*`, `**/themes/custom/**/{package.json,*.css}` | yes | setup, class-detection, drupal-integration |
 
 Naming keeps the `drupal-` prefix from the brief (§7) even though the plugin namespace already disambiguates: the prefix survives when skills are copied into `.agents/skills/` or exported, and it matches the ai_best_practices convention users already see.
 
@@ -327,6 +331,7 @@ Only where isolated context, a different permission profile, or independent judg
 | `drupal-legacy-archaeologist` | P2 | Read, Grep, Glob, Bash (read-only) | mapping D7/8/9 code is long-running and read-only | architecture map, assumptions, business-critical behaviour, risks |
 | `drupal-frontend-specialist` | P2 | all + browser tools | may become a `context: fork` skill instead | |
 | `drupal-performance-reviewer` | P2 | Read, Grep, Bash | profiling output isolation | |
+| `drupal-tailwind-specialist` | P2+ | all | build-and-grep loops over compiled CSS are long and noisy | scan surface before/after, class grep evidence, Preflight/admin findings |
 | `drupal-tech-lead` | dropped for MVP | | with Superpowers, its SDD controller is the tech lead; standalone, `drupal-workflow` + `drupal-architecture` cover it without a second orchestrator | |
 
 Agent bodies preload the relevant skill via `skills:` frontmatter so a subagent that ignores skill discipline (Superpowers' `<SUBAGENT-STOP>`) still has the Drupal lens. Reviewers get `[GLOBAL_CONSTRAINTS]` and the diff path as input, never the implementer's narrative.
@@ -339,10 +344,10 @@ Agent bodies preload the relevant skill via `skills:` frontmatter so a subagent 
 
 | Event | Matcher | Script | Behaviour |
 |---|---|---|---|
-| SessionStart | `startup\|clear\|compact` | `session-start` | Runs `drupal-profile` (cached). If no Drupal project: prints nothing. Otherwise emits the project brief (≤ 10 lines: version and router class, PHP, runtime adapter and environment class, custom module paths, test/lint commands) plus an 18-row **skill routing table** (moment → skill) and the English-only language rule. Evidence for the table: the first with-plugin eval run fired only 10/16 trigger skills without it; the model did the right Drupal work but never invoked the skill. |
-| PreToolUse | `Bash` | `guard-bash` | Parses the command. If it matches the destructive list (spec §52: `drush sql-drop|sql:drop|site:install|si|cim -y|config:import -y|entity:delete|sql:query <DROP|DELETE without WHERE>`, `DROP TABLE`, `rm -rf <project root>`, `git reset --hard`, `git clean -fd`, unbounded `composer update`) and environment class ≠ DISPOSABLE → exit 2 with a one-line reason and the safe alternative (`--preview`, `sql:dump` first, disposable lab). |
+| SessionStart | `startup\|clear\|compact` | `session-start` | Runs `drupal-profile` (cached). If no Drupal project: prints nothing. Otherwise emits the project brief (≤ 10 lines: version and router class, PHP, runtime adapter and environment class, custom module paths, test/lint commands) plus an 19-row **skill routing table** (moment → skill) and the English-only language rule. Evidence for the table: the first with-plugin eval run fired only 10/16 trigger skills without it; the model did the right Drupal work but never invoked the skill. |
+| PreToolUse | `Bash` | `guard-bash` | Parses the command. If it matches the destructive list (spec §52: `drush sql-drop|sql:drop|site:install|si|cim -y|config:import -y|entity:delete|sql:query <DROP|DELETE without WHERE>`, `DROP TABLE`, `rm -rf <project root>`, `git reset --hard`, `git clean -fd`, unbounded `composer update`) and environment class ≠ DISPOSABLE → exit 2 with a one-line reason and the safe alternative (`cim --diff --no`, `sql:dump` first, disposable lab). |
 | PostToolUse | `Edit\|Write` | `lint-php` | For `*.php|*.module|*.install|*.theme|*.inc|*.profile`: host `php -l`; on error, `additionalContext` with the message. `vendor/bin/phpcs` on that file when present, with the project ruleset or `Drupal,DrupalPractice`. Never phpstan, never phpunit. |
-| Stop | — | `stop-gate` | If files under custom module/theme/config paths changed this session (Edit/Write tool calls or Bash edits in the transcript) and no `VERIFY` ledger line or completion report is present in the last assistant message → `decision: block` **once** with the reason "use drupal-verification and end with a report"; exits 0 when `stop_hook_active` is set, so it cannot loop. A context-only Stop hook cannot reach the model, hence the single soft block. Verified under `claude -p` on 2026-09-04 (blocks once, report appended). Requires a persisted session transcript; set `DSP_HOOK_LOG=<file>` to trace it, `DSP_GUARD_LOG=<file>` for the Bash guard. |
+| Stop | — | `stop-gate` | Exits 0 immediately when the cwd is not inside a Drupal project, so a plain `.php` file in someone else's repository never triggers a Drupal report. Inside a project: if files under custom module/theme/config paths changed this session (Edit/Write tool calls or Bash edits in the transcript) and no `VERIFY` ledger line or completion report is present in the last assistant message → `decision: block` **once** with the reason "use drupal-verification and end with a report"; exits 0 when `stop_hook_active` is set, so it cannot loop. A context-only Stop hook cannot reach the model, hence the single soft block. Verified under `claude -p` on 2026-09-04 (blocks once, report appended). Requires a persisted session transcript; set `DSP_HOOK_LOG=<file>` to trace it, `DSP_GUARD_LOG=<file>` for the Bash guard. |
 
 Not included: SubagentStart injection (agents preload skills instead), UserPromptSubmit (nothing deterministic to add), FileChanged monitors (noisy; spec §36).
 
@@ -398,7 +403,7 @@ Small synthetic trees under `fixtures/`, each with a real `composer.lock` slice 
 
 ## 12. Context budget
 
-Always-on cost: manifest + 19 skill descriptions + 8 agent descriptions + hook config ≈ 2.3k tokens (re-measured after Phase 2). SessionStart context (~30 lines incl. the 18-row routing table and the language rule) only in Drupal repos, ≈ 450 tokens more. Per-skill body target ≤ 1.2k tokens; references loaded by explicit link. Verbose operations (test runs, log analysis, research, review, upgrade inventory) go to agents or `context: fork` skills and return ≤ 30 lines. `claude plugin details drupal-superpowers` is run in CI and the number recorded in `docs/evals.md` so regressions are visible.
+Always-on cost: manifest + 20 skill descriptions + 8 agent descriptions + hook config ≈ 2.3k tokens (re-measured after Phase 2). SessionStart context (~30 lines incl. the 18-row routing table and the language rule) only in Drupal repos, ≈ 450 tokens more. Per-skill body target ≤ 1.2k tokens; references loaded by explicit link. Verbose operations (test runs, log analysis, research, review, upgrade inventory) go to agents or `context: fork` skills and return ≤ 30 lines. `claude plugin details drupal-superpowers` is run in CI and the number recorded in `docs/evals.md` so regressions are visible.
 
 ---
 
@@ -407,7 +412,7 @@ Always-on cost: manifest + 19 skill descriptions + 8 agent descriptions + hook c
 | Phase | Contents | Exit criterion |
 |---|---|---|
 | **MVP** (spec §81) | scripts (`drupal-profile`, `drupal-runtime`, `drupal-lookup`, `drupal-facts`, `run-evals`, `validate`), 16 MVP skills, 5 agents, 4 hooks, references (matrix, facts, patterns index), fixtures, trigger/no-trigger evals + the 14 scenario evals, README, docs/security, docs/runtime, docs/evals | acceptance scenarios 1, 2, 4 from spec §84–87 pass on the fixtures; CI green; `claude plugin validate --strict` clean |
-| **P2** (spec §82) — started 2026-09-04 | done: frontend, performance, migrate-api skills; legacy-archaeologist, frontend-specialist, performance-reviewer agents; contribution mode reference; fixtures (theme `acme`, `partner_directory`, `partner_migrate`) and evals. Not done: disposable-lab upgrade matrices, advanced MCP use, architecture reports, CI recommendations | scenarios 3 and 5 pass; real-repo tests on ≥ 3 projects across 10.6 / 11.4 / 12.x |
+| **P2** (spec §82) — completed 2026-09-04 | frontend, performance, migrate-api skills; legacy-archaeologist, frontend-specialist, performance-reviewer agents; contribution-mode reference; `drupal-hard-problem` escalation skill; `scripts/drupal-lab` (disposable labs + `matrix` per core); compatibility-matrix, architecture-report and ci-recommendations references; fixtures (theme `acme`, `partner_directory`, `partner_migrate`) and evals | scenarios 3 and 5 pass; real-repo tests on ≥ 3 projects across 10.6 / 11.4 / 12.x |
 | **later** | multi-harness export (agentskills), upstream contributions to ai_best_practices, marketplace submission | |
 
 ---

@@ -1,0 +1,11 @@
+$schema: https://git.drupalcode.org/project/drupal/-/raw/HEAD/core/assets/schemas/v1/metadata.schema.json
+name: Badge
+status: stable
+props:
+  type: object
+  properties:
+    variant:
+      type: string
+      enum: [primary, neutral, warning]
+    label:
+      type: string

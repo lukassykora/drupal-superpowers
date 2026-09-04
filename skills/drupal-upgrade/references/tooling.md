@@ -6,7 +6,7 @@
 | phpstan-drupal + deprecation rules | `mglaman/phpstan-drupal` 2.1.x, `phpstan/phpstan-deprecation-rules` 2.x | `phpstan analyse -c phpstan.neon` with `extension.neon` + `rules.neon` + deprecation `rules.neon`; set `phpVersion` for the target | precise file:line deprecations |
 | Drupal Rector | `palantirnet/drupal-rector` 1.1.x (Rector ^2) | `vendor/bin/rector process <path> --dry-run --config vendor/palantirnet/drupal-rector/rector.php` (copy the config to the project to customize); rules for 10.0 → 11.4 deprecations, hook → OOP, BC-wrapping | diffs to review |
 | Composer | `composer why-not`, `composer outdated`, `--dry-run`, `composer audit` | constraint resolution | |
-| Drush | `drush pm:security`, `drush pm:security-php`, `drush core:requirements`, `drush updatedb:status` | site-side checks | |
+| Drush | `drush core:requirements`, `drush updatedb:status` (Drush 13 removed `pm:security` and `pm:security-php`; use `composer audit`) | site-side checks | |
 | Change records | `drupal-lookup <symbol>`; drupal.org list filtered by target branch | replacement APIs and reasons | citations |
 | Drupal Code Query | `POST https://api.tresbien.tech/v1/composer/scan` with the lock file → readiness for the next major; `/v1/symbol/{id}` lifecycle | quick readiness view | third-party, optional |
 

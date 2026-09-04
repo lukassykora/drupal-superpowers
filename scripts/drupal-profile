@@ -51,7 +51,7 @@ else
   if [ -z "$DRUPAL_VERSION" ] && [ -f "$CJ" ]; then
     c=$(dsp_json get "$CJ" require.drupal/core-recommended); [ -z "$c" ] && c=$(dsp_json get "$CJ" require.drupal/core)
     [ -z "$c" ] && c=$(dsp_json get "$CJ" require.drupal/core-composer-scaffold)
-    if [ -n "$c" ]; then DRUPAL_VERSION=$(echo "$c" | grep -o '[0-9]\+\(\.[0-9]\+\)*' | head -1); DRUPAL_SOURCE="composer.json-constraint"; fi
+    if [ -n "$c" ]; then v=$(echo "$c" | grep -o '[0-9]\+\(\.[0-9]\+\)*' | head -1); [ -n "$v" ] && { DRUPAL_VERSION=$v; DRUPAL_SOURCE="composer.json-constraint"; }; fi
   fi
 fi
 MAJOR=${DRUPAL_VERSION#dev-}; MAJOR=${MAJOR%%.*}; MINOR=""; case "$DRUPAL_VERSION" in *.*) MINOR=$(echo "${DRUPAL_VERSION#dev-}" | cut -d. -f2 | grep -o '^[0-9]*');; esac
@@ -65,7 +65,7 @@ if [ -n "$DRUPAL_VERSION" ]; then ROUTER=$("$(dirname "$0")/drupal-facts" class 
 # ---- distribution
 DIST="core"
 if [ -f "$CJ" ] && grep -q '"drupal/cms"' "$CJ" 2>/dev/null; then DIST="drupal-cms"; fi
-if [ -f "$ROOT/config/sync/core.extension.yml" ]; then p=$(grep '^profile:' "$ROOT/config/sync/core.extension.yml" | awk '{print $2}'); [ -n "$p" ] && [ "$p" != "minimal" ] && [ "$p" != "standard" ] && DIST="profile:$p"; fi
+DIST_EXT=""   # resolved after CONFIG_SYNC/SYNC_ABS below
 
 # ---- project kind
 PKIND="site"
@@ -98,6 +98,8 @@ if [ -f "$D/sites/default/settings.php" ]; then CONFIG_SYNC=$(grep -v '^ *\(#\|/
 [ -z "$CONFIG_SYNC" ] && [ -f "$D/sites/default/settings.php" ] && CONFIG_SYNC=$(grep -v '^ *\(#\|//\)' "$D/sites/default/settings.php" | grep -o "config_sync_directory'\] *= *[^;]*" | head -1 | sed "s/.*= *//")
 [ -z "$CONFIG_SYNC" ] && [ -d "$ROOT/config/sync" ] && CONFIG_SYNC="config/sync"
 case "$CONFIG_SYNC" in /*) SYNC_ABS=$CONFIG_SYNC;; "") SYNC_ABS="";; *) SYNC_ABS="$D/$CONFIG_SYNC";; esac   # Drupal resolves relative sync paths against the docroot
+for cand in "${SYNC_ABS:-}/core.extension.yml" "$ROOT/config/sync/core.extension.yml"; do [ -n "$cand" ] && [ -f "$cand" ] && { DIST_EXT=$cand; break; }; done
+if [ -n "$DIST_EXT" ]; then p=$(grep '^profile:' "$DIST_EXT" | awk '{print $2}'); [ -n "$p" ] && [ "$p" != "minimal" ] && [ "$p" != "standard" ] && DIST="profile:$p"; fi
 CONFIG_SPLIT=false; { haslock drupal/config_split || { [ -n "$SYNC_ABS" ] && ls "$SYNC_ABS"/config_split.*.yml >/dev/null 2>&1; }; } && CONFIG_SPLIT=true
 
 # ---- modules
@@ -128,8 +130,37 @@ STYLELINT=false; ls "$ROOT"/.stylelintrc* "$ROOT"/stylelint.config.* >/dev/null 
 MAKE=""; [ -f "$ROOT/Makefile" ] && MAKE="Makefile"; [ -f "$ROOT/Taskfile.yml" ] && MAKE="Taskfile.yml"
 
 # ---- frontend
-PM="none"; [ -f "$ROOT/package.json" ] && PM="npm"; [ -f "$ROOT/yarn.lock" ] && PM="yarn"; [ -f "$ROOT/pnpm-lock.yaml" ] && PM="pnpm"
-BUILD="none"; ls "$ROOT"/vite.config.* >/dev/null 2>&1 && BUILD="vite"; ls "$ROOT"/webpack.config.* >/dev/null 2>&1 && BUILD="webpack"
+# Drupal themes usually carry their own package.json, so look in the theme directories too.
+FE_DIRS="$ROOT"; for t in "$D"/themes/custom/*/; do [ -d "$t" ] && FE_DIRS="$FE_DIRS ${t%/}"; done
+PM="none"; BUILD="none"; CSS_FW="none"; CSS_FW_VER=""; FE_ROOT=""
+for fd in $FE_DIRS; do
+  [ -f "$fd/package.json" ] || continue
+  [ -z "$FE_ROOT" ] && FE_ROOT="$fd"
+  [ "$PM" = "none" ] && PM="npm"
+  [ -f "$fd/yarn.lock" ] && PM="yarn"; [ -f "$fd/pnpm-lock.yaml" ] && PM="pnpm"
+  ls "$fd"/vite.config.* >/dev/null 2>&1 && BUILD="vite"
+  ls "$fd"/webpack.config.* >/dev/null 2>&1 && [ "$BUILD" = "none" ] && BUILD="webpack"
+  if grep -q '"tailwindcss"' "$fd/package.json" 2>/dev/null; then
+    CSS_FW="tailwind"
+    CSS_FW_VER=$(sed -n 's/.*"tailwindcss" *: *"\([^"]*\)".*/\1/p' "$fd/package.json" | head -1)
+    [ -z "$FE_ROOT" ] && FE_ROOT="$fd"
+  elif [ "$CSS_FW" = "none" ] && grep -q '"bootstrap"' "$fd/package.json" 2>/dev/null; then
+    CSS_FW="bootstrap"
+    CSS_FW_VER=$(sed -n 's/.*"bootstrap" *: *"\([^"]*\)".*/\1/p' "$fd/package.json" | head -1)
+  fi
+done
+# Tailwind can also be driven by the standalone CLI with no package.json at all.
+if [ "$CSS_FW" = "none" ]; then
+  if ls "$D"/themes/custom/*/tailwind.config.* >/dev/null 2>&1 || ls "$ROOT"/tailwind.config.* >/dev/null 2>&1; then CSS_FW="tailwind"
+  elif grep -rlq '@import *"tailwindcss"' "$D"/themes/custom/*/ 2>/dev/null; then CSS_FW="tailwind"; fi
+fi
+# v4 is CSS-first (@import "tailwindcss"); v3 needs a JS config file and @tailwind directives.
+CSS_FW_STYLE=""
+if [ "$CSS_FW" = "tailwind" ]; then
+  if grep -rlq '@import *"tailwindcss"' "$D"/themes/custom/*/ 2>/dev/null; then CSS_FW_STYLE="css-first(v4)"
+  elif ls "$D"/themes/custom/*/tailwind.config.* >/dev/null 2>&1 || ls "$ROOT"/tailwind.config.* >/dev/null 2>&1; then CSS_FW_STYLE="js-config(v3)"; fi
+fi
+[ "$PM" = "none" ] && [ -f "$ROOT/yarn.lock" ] && PM="yarn"
 SDC=false; ls -d "$D"/themes/custom/*/components >/dev/null 2>&1 && SDC=true
 
 # ---- testing frameworks
@@ -152,12 +183,12 @@ AS_PROJECT=$(ls -d "$ROOT"/.agents/skills/*/ 2>/dev/null | xargs -n1 basename 2>
 AS_VENDOR=$(find "$ROOT/vendor" -maxdepth 4 -type d -path '*/.agents/skills/*' 2>/dev/null | head -20 || true)
 
 # ---- deployment hints
-DEPLOY=""
+DEPLOY=""; DEPLOY_TMP=$(mktemp)
 for f in "$ROOT/.gitlab-ci.yml" "$ROOT"/.github/workflows/*.yml "$ROOT/Makefile" "$ROOT/Taskfile.yml" "$ROOT/composer.json"; do
   [ -f "$f" ] || continue
   grep -Eo 'drush (deploy|updb|cim|config:import|cr)( -y)?' "$f" 2>/dev/null | sort -u | while read -r h; do echo "$(basename "$f"): $h"; done
-done | sort -u > /tmp/dsp_deploy.$$ 2>/dev/null || true
-DEPLOY=$(cat /tmp/dsp_deploy.$$ 2>/dev/null || true); rm -f /tmp/dsp_deploy.$$
+done | sort -u > "$DEPLOY_TMP" 2>/dev/null || true
+DEPLOY=$(cat "$DEPLOY_TMP" 2>/dev/null || true); rm -f "$DEPLOY_TMP"
 
 # ---- emit
 J=$(cat <<EOF
@@ -171,11 +202,13 @@ J=$(cat <<EOF
   "router": $ROUTER,
   "php": {"constraint": $(dsp_jval "$PHP_CONSTRAINT"), "local_cli": $(dsp_jval "$PHP_LOCAL")},
   "packages": {"drush": $(dsp_jval "$(lockver drush/drush)"), "symfony_http_kernel": $(dsp_jval "$(lockver symfony/http-kernel)"), "phpunit": $(dsp_jval "$(lockver phpunit/phpunit)"), "coder": $(dsp_jval "$(lockver drupal/coder)"), "phpstan_drupal": $(dsp_jval "$(lockver mglaman/phpstan-drupal)"), "drupal_rector": $(dsp_jval "$(lockver palantirnet/drupal-rector)"), "upgrade_status": $(dsp_jval "$(lockver drupal/upgrade_status)"), "core_dev": $( haslock drupal/core-dev && echo true || echo false ), "composer_patches": $(dsp_jval "$(lockver cweagans/composer-patches)")},
-  "paths": {"custom_modules": $(printf '%s\n' "${CUSTOM_MODULE_DIRS#$ROOT/}" | dsp_jarr), "custom_themes": $( [ -d "$D/themes/custom" ] && printf '%s\n' "$DOCROOT/themes/custom" | dsp_jarr || echo '[]'), "profiles": $(printf '%s\n' "$PROFILES" | dsp_jarr), "recipes": $(printf '%s\n' "$RECIPES" | dsp_jarr), "config_sync": $(dsp_jval "$CONFIG_SYNC"), "config_split": $CONFIG_SPLIT},
+  "paths": {"custom_modules": $(printf '%s\n' "${CUSTOM_MODULE_DIRS#"$ROOT/"}" | dsp_jarr), "custom_themes": $( [ -d "$D/themes/custom" ] && printf '%s\n' "$DOCROOT/themes/custom" | dsp_jarr || echo '[]'), "profiles": $(printf '%s\n' "$PROFILES" | dsp_jarr), "recipes": $(printf '%s\n' "$RECIPES" | dsp_jarr), "config_sync": $(dsp_jval "$CONFIG_SYNC"), "config_split": $CONFIG_SPLIT},
   "modules": {"contrib": $(printf '%s\n' "$CONTRIB" | dsp_jarr), "custom": $(printf '%s\n' "$CUSTOM_MODULES" | dsp_jarr), "patched": $(printf '%s\n' "$PATCHED" | dsp_jarr)},
   "features": {"multisite": $MULTISITE, "multilingual": $MULTILINGUAL, "content_moderation": $MODERATION, "workspaces": $WORKSPACES, "search": $(dsp_jstr "$SEARCH"), "queue": $(dsp_jstr "$QUEUE"), "cron": $(dsp_jstr "$CRON"), "database": $(dsp_jstr "$DBTYPE")},
   "quality": {"phpcs_config": $(dsp_jval "$PHPCS_CFG"), "phpstan_config": $(dsp_jval "$PHPSTAN_CFG"), "phpunit_config": $(dsp_jval "$PHPUNIT_CFG"), "composer_scripts": $(printf '%s\n' "$SCRIPTS" | dsp_jarr), "task_runner": $(dsp_jval "$MAKE"), "ci": $(dsp_jstr "$CI"), "eslint": $ESLINT, "stylelint": $STYLELINT},
-  "frontend": {"package_manager": $(dsp_jstr "$PM"), "build": $(dsp_jstr "$BUILD"), "sdc": $SDC},
+  "frontend": {"package_manager": $(dsp_jstr "$PM"), "build": $(dsp_jstr "$BUILD"), "sdc": $SDC,
+               "root": $(dsp_jstr "${FE_ROOT#$ROOT/}"), "css_framework": $(dsp_jstr "$CSS_FW"),
+               "css_framework_version": $(dsp_jstr "$CSS_FW_VER"), "css_framework_style": $(dsp_jstr "$CSS_FW_STYLE")},
   "testing_frameworks": $(printf '%s\n' $TF | dsp_jarr),
   "mcp": {"configured_servers": $(printf '%s\n' "$MCP_SERVERS" | dsp_jarr), "fingerprint_hints": $(printf '%s\n' $MCP_HINTS | dsp_jarr)},
   "agent_skills": {"project": $(printf '%s\n' "$AS_PROJECT" | dsp_jarr), "vendor": $(printf '%s\n' "$AS_VENDOR" | dsp_jarr)},
@@ -191,6 +224,7 @@ if [ $SUMMARY -eq 1 ]; then
   printf 'custom modules: %s\n' "$(echo $CUSTOM_MODULES | tr '\n' ' ')"
   printf 'config: %s%s · ci: %s · tests: %s · lint: %s%s\n' "${CONFIG_SYNC:-none}" "$( $CONFIG_SPLIT && echo ' (config_split)')" "$CI" "${TF:-none}" "${PHPCS_CFG:-none}" "${PHPSTAN_CFG:+ + $PHPSTAN_CFG}"
   [ -n "$SCRIPTS" ] && printf 'composer scripts: %s\n' "$(echo $SCRIPTS | tr '\n' ' ')"
+  [ "$CSS_FW" != "none" ] && printf 'frontend: %s %s %s · pm %s · build %s%s\n' "$CSS_FW" "$CSS_FW_VER" "$CSS_FW_STYLE" "$PM" "$BUILD" "$( $SDC && echo ' · sdc')"
   if [ -n "$(echo $MCP_HINTS $MCP_SERVERS)" ]; then printf 'mcp servers: %s · hints:%s\n' "$(echo $MCP_SERVERS)" "$(echo " $MCP_HINTS")"; fi
   [ -n "$RN" ] && printf 'router note: %s\n' "$RN"
 else

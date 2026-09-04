@@ -17,6 +17,7 @@ Status: **0.2.0, MVP + Phase 2 (frontend, performance, Migrate API, legacy/front
 | Uses tests as evidence | Cheapest proving layer (Unit → Kernel → Functional → FunctionalJavascript), regression test first for bugs, integrity rules (no weakened assertions) |
 | Verifies at three levels and says which ran | L1 static, L2 Drupal automated, L3 live; every claim is `PASS`, `FAIL`, `NOT VERIFIED — reason`, or `NOT APPLICABLE` |
 | Runs safely | A PreToolUse guard blocks `drush sql:drop`, `site:install`, `cim -y`, `entity:delete`, destructive SQL, `git reset --hard`, unbounded `composer update` outside disposable environments |
+| Knows the front end, Tailwind included | Twig, libraries, `Drupal.behaviors`, SDC and accessibility in `drupal-frontend`; the Tailwind pipeline in `drupal-tailwind` — `@source` globs that reach `components/` and `*.theme`, safelists for classes Twig builds at render time, Preflight versus the admin UI and CKEditor 5, and what Drupal's CSS aggregation does to a layered `@import` |
 | Works with or without Superpowers | With Superpowers installed, its process skills run first and Drupal skills supply the domain knowledge inside them; standalone, `drupal-workflow` provides a compact process |
 | Uses Drupal MCP when present, never depends on it | Fingerprint-based detection of MCP Tools, MCP Server 2.x, drush-mcp and others; read-only first; shell-equivalent tools get the Bash guard's rules |
 
@@ -58,7 +59,7 @@ Explicit entry points (user-invocable skills): `/drupal-superpowers:drupal-proje
 
 ## Architecture in one paragraph
 
-Twenty capability skills (short `SKILL.md`, detail in `references/`), eight agents (read-only researcher, security reviewer, code reviewer, performance reviewer, legacy archaeologist; test engineer, upgrade specialist, frontend specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
+Twenty-one capability skills (short `SKILL.md`, detail in `references/`), nine agents (read-only researcher, security reviewer, code reviewer, performance reviewer, legacy archaeologist; test engineer, upgrade specialist, frontend specialist, Tailwind specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
 
 ## Superpowers interoperability
 
@@ -78,7 +79,7 @@ Project wrappers (`composer test`, Makefile targets) take precedence. Details: [
 
 ### Optional DDEV / disposable lab
 
-If your project has no runnable environment, Claude may offer to create a throw-away Drupal environment under the plugin's data directory (DDEV when installed, otherwise Docker Compose). It never installs Docker or DDEV and never touches your project's own environment. See `skills/drupal-runtime-verification/references/disposable-lab.md`.
+If your project has no runnable environment, Claude may offer to create a throw-away Drupal environment under the plugin's data directory. `scripts/drupal-lab create <name> --core '^11.4'` builds it (DDEV, else Docker Compose, else native PHP + SQLite), `drupal-lab matrix` builds one per core for compatibility testing, and `drupal-lab destroy <name>` removes it. It never installs Docker or DDEV and never touches your project's own environment. See `skills/drupal-runtime-verification/references/disposable-lab.md`.
 
 ### Optional Drupal MCP
 
@@ -90,19 +91,19 @@ The plugin follows Claude Code's model guidance: everyday coding stays on the mo
 
 | What | Model / effort |
 |---|---|
-| Everyday skills (module development, testing, config, research, verification, frontend, migrations) | your session model |
+| Everyday skills (module development, testing, config, research, verification, frontend, Tailwind, migrations) | your session model |
 | `drupal-architecture` (architectural-class design, brainstorming) | Fable, xhigh (rest of the turn; bounded changes use its decision tables without invoking it) |
 | `drupal-debugging`, `drupal-code-review`, `drupal-security`, `drupal-upgrade`, `drupal-performance` | Opus, high (rest of the turn) |
 | `drupal-hard-problem` (debugging after two falsified hypotheses, intermittent bugs, unsettled design) | Fable, xhigh |
 | Agents: researcher, test engineer | Sonnet |
-| Agents: frontend specialist | Sonnet, high |
+| Agents: frontend specialist, Tailwind specialist | Sonnet, high |
 | Agents: code/security/performance reviewers, upgrade specialist, legacy archaeologist | Opus, high |
 
 Recommended session setup: `/model sonnet` (or `/model opusplan` to plan on Opus and execute on Sonnet). Override any agent by placing a same-named file in `.claude/agents/` or `~/.claude/agents/`; force every subagent onto one model with `CLAUDE_CODE_SUBAGENT_MODEL` + `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. Details and rationale: [docs/taxonomy.md](docs/taxonomy.md) §4c.
 
 ## Security model
 
-Summary in [docs/security.md](docs/security.md): environment classification (DISPOSABLE / LOCAL / DEVELOPMENT / STAGING / UNKNOWN / PRODUCTION), the destructive-command guard, read-only agents, MCP least privilege, no secrets in the plugin or transcripts, no git operations unless asked.
+Git stays yours: the plugin never stages, commits, pushes, merges, rebases, or branches on its own, and every task that changes files ends with the `git add`/`git commit` commands you can paste plus what it left out. Summary in [docs/security.md](docs/security.md): environment classification (DISPOSABLE / LOCAL / DEVELOPMENT / STAGING / UNKNOWN / PRODUCTION), the destructive-command guard, read-only agents, MCP least privilege, no secrets in the plugin or transcripts, no git operations unless asked.
 
 ## Development
 

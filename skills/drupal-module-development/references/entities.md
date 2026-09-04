@@ -31,6 +31,7 @@ final class SavedList extends EditorialContentEntityBase implements EntityOwnerI
   use EntityOwnerTrait; use EntityPublishedTrait; use EntityChangedTrait;
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type): array {
     $fields = parent::baseFieldDefinitions($entity_type) + static::ownerBaseFieldDefinitions($entity_type) + static::publishedBaseFieldDefinitions($entity_type);
+    $fields['changed'] = BaseFieldDefinition::create('changed')->setLabel(t('Changed'))->setTranslatable(TRUE)->setRevisionable(TRUE);
     $fields['title'] = BaseFieldDefinition::create('string')->setLabel(t('Title'))->setRequired(TRUE)->setTranslatable(TRUE)->setRevisionable(TRUE)->setSetting('max_length', 255)->setDisplayOptions('form', ['type' => 'string_textfield'])->setDisplayConfigurable('form', TRUE);
     return $fields;
   }

@@ -10,7 +10,7 @@ Rows are classes of changed files; columns are gates. `req` = required (PASS/FAI
 | `config/install`, `config/schema`, `config/optional` | req | req | — | yml lint | — | req (kernel config test or install) | opt | — | permissions config: req | — | — | — | req |
 | PHP: controllers, forms, plugins, subscribers, services | req | req | req | req | req | req | opt | req | req when entity/user data | req when output/response | opt | opt when UI | opt |
 | PHP: entity types, storage, access handlers | req | req | req | req | req | req (kernel) | req | req | req | req (entity cacheability) | opt | — | req (updb) |
-| `.install`, `hook_update_N`, `post_update` | req | req | req | req | req | req (update test or kernel) | req (`updb -n`) | — | — | — | opt | — | req |
+| `.install`, `hook_update_N`, `post_update` | req | req | req | req | req | req (update test or kernel) | req (`updatedb:status`) | — | — | — | opt | — | req |
 | Twig, `*.libraries.yml`, JS, CSS | req | req | opt | twig/eslint/stylelint | — | opt (FunctionalJavascript) | opt (cache rebuild) | escaping: req | — | req | opt | req when runtime | opt |
 | tests only | req | req | — | req | opt | req (they run) | — | — | — | — | — | — | — |
 | migrations YAML / process plugins | req | req | req | yml lint | req | req (migrate kernel) | req | — | — | — | opt | — | req |

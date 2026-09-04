@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+# drupal-lab: create, list, and destroy disposable Drupal environments (spec §30, docs/runtime.md).
+# A lab is always created OUTSIDE the user's project, marked with .drupal-superpowers-lab so the runtime
+# adapter classifies it DISPOSABLE, and removable with one command. Nothing here touches the user's project,
+# and Docker/DDEV are never installed.
+#
+#   drupal-lab create <name> --core <constraint> [--php <version>] [--engine ddev|docker|native]
+#                            [--module <path>]... [--profile minimal|standard] [--no-install]
+#   drupal-lab list
+#   drupal-lab path <name>
+#   drupal-lab destroy <name>
+#   drupal-lab matrix <name-prefix> --cores "^10.6,^11.4" --module <path> [--command "<cmd>"]
+#
+# `matrix` builds one lab per core constraint and runs the same command in each (upgrade/compat testing).
+# Engines: ddev when the binary exists, else docker (fixtures/lab-compose), else native (needs php + sqlite).
+set -u
+DSP_ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+. "$DSP_ROOT_DIR/scripts/lib/common.sh"
+
+LABS="${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}/drupal-superpowers}/labs"
+mkdir -p "$LABS" 2>/dev/null
+
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+die() { echo "drupal-lab: $*" >&2; exit 1; }
+
+pick_engine() {
+  case "${1:-auto}" in
+    ddev|docker|native) echo "$1"; return;;
+  esac
+  dsp_have ddev && { echo ddev; return; }
+  dsp_have docker && { echo docker; return; }
+  dsp_have php && { echo native; return; }
+  echo none
+}
+
+cmd_create() {
+  local name=${1:-}; shift || true
+  [ -n "$name" ] || usage
+  local core="" php="" engine="auto" profile="minimal" install=1 modules=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --core) core=${2:-}; shift 2;;
+      --php) php=${2:-}; shift 2;;
+      --engine) engine=${2:-}; shift 2;;
+      --profile) profile=${2:-}; shift 2;;
+      --module) modules+=("${2:-}"); shift 2;;
+      --no-install) install=0; shift;;
+      *) die "unknown option $1";;
+    esac
+  done
+  [ -n "$core" ] || die "--core is required (e.g. --core '^11.4')"
+  local dir="$LABS/$name"
+  [ -e "$dir" ] && die "lab '$name' already exists at $dir (destroy it first)"
+  engine=$(pick_engine "$engine")
+  [ "$engine" = none ] && die "no engine available: install DDEV or Docker, or provide php on PATH"
+
+  echo "Creating disposable lab '$name' (engine: $engine, core: $core) at $dir"
+  mkdir -p "$dir" || die "cannot create $dir"
+  # The marker is written AFTER composer create-project: that command refuses a non-empty directory.
+  trap 'chmod -R u+w "$dir" 2>/dev/null; rm -rf "$dir"' EXIT
+
+  case "$engine" in
+    docker)
+      cp "$DSP_ROOT_DIR/fixtures/lab-compose/compose.yaml" "$dir/compose.yaml"
+      [ -n "$php" ] && sed -i.bak "s/php:8.3-cli/php:${php}-cli/g" "$dir/compose.yaml" && rm -f "$dir/compose.yaml.bak"
+      ( cd "$dir" && COMPOSE_PROJECT_NAME="dsp-$name" docker compose up -d ) || die "docker compose up failed"
+      echo "waiting for the php service to install its extensions (first start takes a few minutes)"
+      local i=0; while [ $i -lt 120 ]; do ( cd "$dir" && COMPOSE_PROJECT_NAME="dsp-$name" docker compose exec -T php test -f /tmp/.dsp-ready ) 2>/dev/null && break; sleep 5; i=$((i+1)); done
+      local X="cd $dir && COMPOSE_PROJECT_NAME=dsp-$name docker compose exec -T php sh -c"
+      eval "$X \"composer create-project drupal/recommended-project:$core /tmp/site --no-interaction --no-progress >/dev/null && cp -a /tmp/site/. /app/\"" || die "create-project failed"
+      eval "$X \"cd /app && composer require --dev drupal/core-dev:$core --with-all-dependencies --no-interaction --no-progress >/dev/null\"" || echo "warning: core-dev install failed"
+      eval "$X \"cd /app && composer require drush/drush --no-interaction --no-progress >/dev/null\"" || die "drush install failed"
+      [ $install -eq 1 ] && eval "$X \"cd /app && vendor/bin/drush site:install $profile -y --db-url=mysql://drupal:drupal@db/drupal --account-pass=admin >/dev/null\""
+      ;;
+    ddev)
+      ( cd "$dir" && composer create-project "drupal/recommended-project:$core" . --no-interaction --no-progress ) || die "create-project failed"
+      ( cd "$dir" && composer require --dev "drupal/core-dev:$core" --with-all-dependencies --no-interaction --no-progress ) || echo "warning: core-dev install failed"
+      ( cd "$dir" && composer require drush/drush --no-interaction --no-progress ) || die "drush install failed"
+      ( cd "$dir" && ddev config --project-type=drupal --docroot=web --project-name="dsp-$name" ${php:+--php-version="$php"} >/dev/null && ddev start ) || die "ddev start failed"
+      [ $install -eq 1 ] && ( cd "$dir" && ddev drush site:install "$profile" -y --account-pass=admin >/dev/null )
+      ;;
+    native)
+      ( cd "$dir" && composer create-project "drupal/recommended-project:$core" . --no-interaction --no-progress ) || die "create-project failed"
+      ( cd "$dir" && composer require --dev "drupal/core-dev:$core" --with-all-dependencies --no-interaction --no-progress ) || echo "warning: core-dev install failed"
+      ( cd "$dir" && composer require drush/drush --no-interaction --no-progress ) || die "drush install failed"
+      mkdir -p "$dir/web/sites/default/files"; chmod -R u+w "$dir/web/sites/default"
+      [ $install -eq 1 ] && ( cd "$dir" && vendor/bin/drush site:install "$profile" -y --db-url=sqlite://sites/default/files/.ht.sqlite --account-pass=admin >/dev/null )
+      ;;
+  esac
+
+  for m in ${modules[@]+"${modules[@]}"}; do
+    [ -d "$m" ] || { echo "warning: module path $m not found"; continue; }
+    mkdir -p "$dir/web/modules/custom"; cp -R "$m" "$dir/web/modules/custom/"
+    echo "copied $(basename "$m") into the lab"
+  done
+
+  : > "$dir/.drupal-superpowers-lab"
+  echo "$engine" > "$dir/.dsp-engine"
+  trap - EXIT
+  echo
+  echo "Lab ready: $dir (environment class DISPOSABLE)"
+  "$DSP_ROOT_DIR/scripts/drupal-runtime" "$dir" --summary 2>/dev/null | head -2
+  echo "Destroy with: $0 destroy $name"
+}
+
+cmd_list() {
+  [ -d "$LABS" ] || { echo "no labs"; return 0; }
+  local found=0
+  for d in "$LABS"/*/; do
+    [ -d "$d" ] || continue
+    found=1
+    printf '%-24s %-8s %s\n' "$(basename "$d")" "$(cat "$d/.dsp-engine" 2>/dev/null || echo '?')" "$d"
+  done
+  [ $found -eq 0 ] && echo "no labs"
+  return 0
+}
+
+cmd_path() { local n=${1:-}; [ -n "$n" ] || usage; [ -d "$LABS/$n" ] || die "no lab '$n'"; echo "$LABS/$n"; }
+
+cmd_destroy() {
+  local n=${1:-}; [ -n "$n" ] || usage
+  local dir="$LABS/$n"; [ -d "$dir" ] || die "no lab '$n'"
+  # Ownership check: the directory must sit directly under the plugin's labs dir AND carry one of our
+  # markers. A partially removed lab can lose .drupal-superpowers-lab, so .dsp-engine counts too.
+  case "$dir" in "$LABS"/*) ;; *) die "$dir is outside $LABS; refusing";; esac
+  { [ -f "$dir/.drupal-superpowers-lab" ] || [ -f "$dir/.dsp-engine" ]; } || die "$dir has no lab marker; refusing to delete a directory this script did not create (remove it by hand if it is really a leftover lab)"
+  case "$(cat "$dir/.dsp-engine" 2>/dev/null)" in
+    docker) ( cd "$dir" && COMPOSE_PROJECT_NAME="dsp-$n" docker compose down -v >/dev/null 2>&1 );;
+    ddev) ( cd "$dir" && ddev delete -Oy "dsp-$n" >/dev/null 2>&1 );;
+  esac
+  # Drupal's installer makes sites/default and settings.php read-only; make them writable before removing.
+  chmod -R u+w "$dir" 2>/dev/null || true
+  rm -rf "$dir"
+  [ -e "$dir" ] && die "could not fully remove $dir (check permissions or a running container)"
+  echo "destroyed lab '$n'"
+}
+
+cmd_matrix() {
+  local prefix=${1:-}; shift || true
+  [ -n "$prefix" ] || usage
+  local cores="" module="" command=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --cores) cores=${2:-}; shift 2;;
+      --module) module=${2:-}; shift 2;;
+      --command) command=${2:-}; shift 2;;
+      *) die "unknown option $1";;
+    esac
+  done
+  [ -n "$cores" ] || die "--cores is required (e.g. --cores '^10.6,^11.4')"
+  local IFS=','; local rc=0
+  for c in $cores; do
+    local tag; tag=$(printf '%s' "$c" | tr -cd '0-9.' | tr '.' '-')
+    local name="${prefix}-${tag}"
+    echo "=== $name (core $c)"
+    cmd_create "$name" --core "$c" ${module:+--module "$module"} || { rc=1; continue; }
+    if [ -n "$command" ]; then
+      local dir="$LABS/$name" drush
+      drush=$("$DSP_ROOT_DIR/scripts/drupal-runtime" "$dir" 2>/dev/null | sed -n 's/.*"drush": *"\([^"]*\)".*/\1/p' | head -1)
+      echo "--- running: $command"
+      ( cd "$dir" && DSP_DRUSH="$drush" sh -c "$command" ) || { echo "FAILED on core $c"; rc=1; }
+    fi
+  done
+  echo
+  echo "Matrix done. Labs: $(cmd_list | wc -l | tr -d ' ') (destroy each with '$0 destroy <name>')"
+  return $rc
+}
+
+case "${1:-}" in
+  create) shift; cmd_create "$@";;
+  list) shift; cmd_list "$@";;
+  path) shift; cmd_path "$@";;
+  destroy) shift; cmd_destroy "$@";;
+  matrix) shift; cmd_matrix "$@";;
+  *) usage;;
+esac

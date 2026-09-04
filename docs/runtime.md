@@ -38,7 +38,7 @@ See [security.md](security.md) §1. Signals: the lab marker file, hosting enviro
 | Level | What | Commands (through the adapter) |
 |---|---|---|
 | L1 static | syntax, coding standards, static analysis | `php -l`, `phpcs --standard=<project or Drupal,DrupalPractice>`, `phpstan analyse`, YAML/Twig lint, `composer validate/audit` |
-| L2 Drupal automated | tests and bootstrap | `phpunit -c <config> <path>`, `drush status`, `drush cr`, `drush updb -n`, `drush config:status`, `drush cim --preview=diff` |
+| L2 Drupal automated | tests and bootstrap | `phpunit -c <config> <path>`, `drush status`, `drush cr`, `drush updatedb:status`, `drush config:status`, `drush cim --diff --no` |
 | L3 live | the running site | `curl -i`, `drush user:login` links + browser, `drush watchdog:show`, two-user cache checks |
 
 Every check is recorded as `VERIFY <level> <check> <PASS|FAIL|NOT VERIFIED|NOT APPLICABLE> "<command>" <result>`; `drupal-verification` builds the completion report from these lines.

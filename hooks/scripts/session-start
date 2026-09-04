@@ -6,7 +6,7 @@ PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 . "$PLUGIN/scripts/lib/common.sh"
 
 input=$(cat 2>/dev/null || true)
-cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p' | head -1)
+tmp=$(mktemp); printf '%s' "$input" > "$tmp"; cwd=$(dsp_json get "$tmp" cwd); rm -f "$tmp"
 [ -z "$cwd" ] && cwd=$(pwd)
 
 read -r KIND ROOT <<<"$(dsp_find_root "$cwd")"
@@ -22,7 +22,7 @@ $runtime
 Facts above come from files, not memory; anything not listed is unknown until checked.
 Language rule: write ALL code, machine names, identifiers, comments, docblocks, YAML labels, tests, and reports in English, whatever language the user writes in; user-facing strings are English inside t()/TranslatableMarkup so Drupal translates them.
 
-Two rules in this repo: (1) invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; (2) never end a reply that says done, fixed, works, or passes without invoking drupal-verification first, even for a one-line change. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
+Three rules in this repo: (1) invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; (2) never end a reply that says done, fixed, works, or passes without invoking drupal-verification first, even for a one-line change; (3) git belongs to the user: never stage, commit, push, merge, rebase, tag, branch, or stash unless the user asked for that exact operation, and end every file-changing task with the git add/commit commands they can paste plus what you left out. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
 
 Skill routing (several can apply in sequence):
 - version, paths, runtime, or commands unknown → drupal-project-understanding
@@ -37,6 +37,7 @@ Skill routing (several can apply in sequence):
 - config/install, schema, sync, drift, cex/cim, config vs state → drupal-config
 - any new feature or module, before writing custom code (does core or a contrib module already do it?), or picking a dependency → drupal-contrib-research
 - about to run drush/composer/phpunit/phpcs/phpstan, verify on a site, or use Drupal MCP tools → drupal-runtime-verification
+- theme uses Tailwind (profile line 'frontend: tailwind …'): missing utilities, @source/content globs, safelist, build wiring, Preflight vs admin/CKEditor, v3→v4 → drupal-tailwind
 - reviewing a diff, module, or PR → drupal-code-review
 - about to say done, fixed, working, or passing → drupal-verification
 - core/PHP/Symfony upgrades, deprecations, Rector, contrib major bumps → drupal-upgrade

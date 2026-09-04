@@ -28,9 +28,24 @@ jobs:
           scripts/drupal-profile fixtures/site-legacy-d7 --no-cache | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['drupal']['major']==7 and d['router']['class']=='eol', d"
           scripts/drupal-runtime fixtures/site-prodlike | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['environment']['class'] in ('UNKNOWN','PRODUCTION'), d"
           scripts/drupal-runtime fixtures/site-ddev | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'ddev' in d['declared'], d"
-          printf '{"cwd":"%s/fixtures/site-prodlike","tool_input":{"command":"drush site:install -y"}}' "$PWD" | CLAUDE_PLUGIN_ROOT=$PWD bash hooks/scripts/guard-bash; test $? -eq 2
-          printf '{"cwd":"%s/fixtures/site-prodlike","tool_input":{"command":"drush cim --preview=diff"}}' "$PWD" | CLAUDE_PLUGIN_ROOT=$PWD bash hooks/scripts/guard-bash; test $? -eq 0
+          scripts/drupal-profile fixtures/site-tailwind --no-cache | python3 -c "import sys,json; d=json.load(sys.stdin)['frontend']; assert d['css_framework']=='tailwind' and d['css_framework_style']=='css-first(v4)' and d['root'].endswith('themes/custom/tw'), d"
           printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | python3 fixtures/mcp-stub/server.py | grep -q get_site_status
+
+      - name: Guard hook assertions
+        run: |
+          # errexit would kill the step on the guard's intentional exit 2, so capture the status.
+          guard() { rc=0; printf '{"cwd":"%s","tool_input":{"command":%s}}' "$PWD/fixtures/$1" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$2")" \
+            | CLAUDE_PLUGIN_ROOT=$PWD bash hooks/scripts/guard-bash >/dev/null 2>&1 || rc=$?; echo "$rc"; }
+          fail=0
+          for c in "drush site:install -y" "bash -c 'drush sql:drop'" "git -C /r reset --hard" "rm --recursive --force web" "composer -n update" "drush cim --diff -y"; do
+            [ "$(guard site-prodlike "$c")" = 2 ] || { echo "NOT BLOCKED: $c"; fail=1; }
+          done
+          for c in "drush cim --diff --no" "composer update drupal/core -W" "drush config:status" "git push --force-with-lease origin f" "git commit -m x"; do
+            [ "$(guard site-prodlike "$c")" = 0 ] || { echo "WRONGLY BLOCKED: $c"; fail=1; }
+          done
+          printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"replace_all":false,"file_path":"/p/web/modules/custom/foo/foo.module"}}]}}\n{"role":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}\n' > /tmp/t.jsonl
+          printf '{"cwd":"%s/fixtures/site-current","transcript_path":"/tmp/t.jsonl"}' "$PWD" | CLAUDE_PLUGIN_ROOT=$PWD bash hooks/scripts/stop-gate | grep -q '"decision":"block"' || { echo "stop-gate did not block an unreported edit"; fail=1; }
+          exit $fail
 
   evals-trigger:
     # Needs ANTHROPIC_API_KEY (or a Claude Code OAuth token) in repository secrets; skipped otherwise.
@@ -39,6 +54,7 @@ jobs:
     needs: validate
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -46,8 +62,13 @@ jobs:
           php-version: "8.3"
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
+      - name: Fail when no credential is configured
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret, eval jobs cannot run"
+            exit 1
+          fi
       - name: Trigger / no-trigger evals (deterministic graders only)
-        if: ${{ env.ANTHROPIC_API_KEY != '' }}
         run: scripts/run-evals --group trigger --group no-trigger --no-llm --runs 1
       - uses: actions/upload-artifact@v4
         if: always()
@@ -61,6 +82,7 @@ jobs:
     needs: validate
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -68,9 +90,16 @@ jobs:
           php-version: "8.3"
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
+      - name: Fail when no credential is configured
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "No credential secret, eval jobs cannot run"
+            exit 1
+          fi
       - name: Scenario, agent, and acceptance evals
-        if: ${{ env.ANTHROPIC_API_KEY != '' }}
         run: scripts/run-evals --group scenarios --group agents --group acceptance --runs 2
+      # The integration group needs prebuilt labs (DSP_LAB_D11 / DSP_LAB_D10) and is run manually;
+      # see docs/evals.md §8 and scripts/drupal-lab.
       - uses: actions/upload-artifact@v4
         if: always()
         with:

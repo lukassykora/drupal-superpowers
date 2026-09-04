@@ -28,6 +28,7 @@ done
 [ -n "$Q" ] || { echo "usage: drupal-lookup <symbol|words> [--kind ...] [--branch 11.x] [--dir <project>]"; exit 1; }
 
 read -r RKIND ROOT <<<"$(dsp_find_root "$DIR")"
+[ "$RKIND" = "none" ] && ROOT=$(cd "$DIR" 2>/dev/null && pwd)   # never fall back to the shell cwd
 DOCROOT=$(dsp_find_docroot "$ROOT"); CORE="$ROOT/$DOCROOT/core"; [ "$DOCROOT" = "." ] && CORE="$ROOT/core"
 VERSION=""; [ -f "$ROOT/composer.lock" ] && VERSION=$(dsp_json lockversions "$ROOT/composer.lock" | awk '$1=="drupal/core"{print $2}')
 [ -z "$VERSION" ] && [ -f "$CORE/lib/Drupal.php" ] && VERSION=$(grep -o "const VERSION = '[^']*'" "$CORE/lib/Drupal.php" | sed "s/.*'\([^']*\)'/\1/")

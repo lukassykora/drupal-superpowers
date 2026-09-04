@@ -11,7 +11,7 @@ curl -sI <site_url>/partners | grep -iE 'x-drupal-(dynamic-)?cache|cache-control
 drush php:eval '
   \Drupal\Core\Database\Database::startLog("perf");
   $t = microtime(TRUE); $m = memory_get_usage();
-  $r = \Drupal::service('http_kernel')->handle(\Symfony\Component\HttpFoundation\Request::create("/partners"));
+  $r = \Drupal::service("http_kernel")->handle(\Symfony\Component\HttpFoundation\Request::create("/partners"));
   printf("status %d, %.3fs, %.1f MB, %d queries\n", $r->getStatusCode(), microtime(TRUE)-$t, (memory_get_peak_usage()-$m)/1048576, count(\Drupal\Core\Database\Database::getLog("perf")));
 '
 # Slowest queries from the log
@@ -24,9 +24,9 @@ Kernel-level measurement: a Kernel test with `Database::startLog()` around the c
 |---|---|---|
 | Webprofiler (`drupal/webprofiler`) | in lock | toolbar panels: database (queries with time), cache (hits/misses per bin), render (cacheability), events, services |
 | Devel | in lock | `dpq()` for query strings, `devel_generate` for realistic data volume on LOCAL/DISPOSABLE |
-| Xdebug profiler | `php -m | grep xdebug`, `ddev xdebug` | `xdebug.mode=profile`, cachegrind output → QCacheGrind/`webgrind`; CLI: `XDEBUG_MODE=profile drush ...` |
+| Xdebug profiler | `php -m \| grep xdebug`, `ddev xdebug` | `xdebug.mode=profile`, cachegrind output → QCacheGrind/`webgrind`; CLI: `XDEBUG_MODE=profile drush ...` |
 | XHProf / Tideways | in lock or `php -m` | function-level timings with less overhead |
-| MySQL `EXPLAIN` | `drush sql:query "EXPLAIN SELECT ..."` (read-only) | index usage, filesort, temporary tables |
+| MySQL `EXPLAIN` \| `drush sql:query "EXPLAIN SELECT ..."` (read-only) | index usage, filesort, temporary tables |
 | Load testing | `ab`, `hey`, `wrk`, `k6` on LOCAL only | throughput and p95 before/after |
 | Browser | Lighthouse / DevTools performance panel | front-end: assets, render blocking, image sizes |
 

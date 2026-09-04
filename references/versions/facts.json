@@ -11,8 +11,8 @@
       "since": "11.1.0",
       "until": null,
       "change_record": "https://www.drupal.org/node/3442349",
-      "verify_in_core": "core/lib/Drupal/Core/Hook/Attribute/Hook.php",
-      "note": "Use #[LegacyHook] on the procedural shim for 10.x compatibility. Stay procedural in every version: hook_install, hook_schema, hook_update_N, hook_post_update_NAME, hook_hook_info, hook_module_implements_alter. hook_theme CAN be #[Hook('theme')] on 11.1+ (core does it). hook_requirements: procedural in 11.1; from 11.2 runtime/update checks are #[Hook('runtime_requirements')] / #[Hook('update_requirements')], and a procedural hook_requirements needs #[LegacyRequirementsHook] on 11.3+ (removed in 13.0)."
+      "verify_in_core": "core/lib/Drupal/Core/Hook/Attribute/Hook.php and core/lib/Drupal/Core/Hook/HookCollectorPass.php (grep staticDenyHooks)",
+      "note": "Use #[LegacyHook] on the procedural shim for 10.x compatibility. Core rejects #[Hook] for these (HookCollectorPass::$staticDenyHooks, LogicException at compile): hook_hook_info, hook_install, hook_install_tasks, hook_install_tasks_alter, hook_module_implements_alter, hook_removed_post_updates, hook_requirements, hook_schema, hook_uninstall, hook_update_dependencies, hook_update_last_removed, hook_update_N, hook_post_update_NAME. hook_theme CAN be #[Hook('theme')] on 11.1+ (core does it). From 11.2 runtime/update checks are #[Hook('runtime_requirements')] / #[Hook('update_requirements')]; a procedural hook_requirements needs #[LegacyRequirementsHook] on 11.3+."
     },
     {
       "id": "oop-hooks-ordering",
@@ -29,7 +29,7 @@
       "since": "11.3.0",
       "until": null,
       "change_record": "https://www.drupal.org/node/3551652",
-      "verify_in_core": "core/lib/Drupal/Core/Theme/ThemeManager.php"
+      "verify_in_core": "core/lib/Drupal/Core/Hook/ThemeHookCollectorPass.php"
     },
     {
       "id": "procedural-hooks-not-deprecated",
@@ -55,7 +55,7 @@
       "since": "11.2.0",
       "until": null,
       "change_record": "https://www.drupal.org/node/3522776",
-      "verify_in_core": "core/lib/Drupal/Core/Plugin/Discovery/AttributeDiscoveryWithAnnotations.php"
+      "verify_in_core": "core/lib/Drupal/Core/Plugin/DefaultPluginManager.php (grep 'attribute') and core/lib/Drupal/Core/Plugin/Discovery/AttributeDiscoveryWithAnnotations.php"
     },
     {
       "id": "recipes",

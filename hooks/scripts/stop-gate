@@ -11,26 +11,51 @@ input=$(cat 2>/dev/null || true)
 tmp=$(mktemp); printf '%s' "$input" > "$tmp"
 transcript=$(dsp_json get "$tmp" transcript_path)
 active=$(dsp_json get "$tmp" stop_hook_active)
+cwd=$(dsp_json get "$tmp" cwd)
 rm -f "$tmp"
-[ -n "${DSP_HOOK_LOG:-}" ] && printf 'stop-gate ran active=%s transcript=%s\n' "$active" "$transcript" >> "$DSP_HOOK_LOG"   # debug
+[ -z "$cwd" ] && cwd=$(pwd)
+
+# Inert outside a Drupal project: a plain .php file in someone else's repo needs no Drupal report.
+read -r KIND _ROOT <<<"$(dsp_find_root "$cwd")"
+[ "$KIND" = "none" ] && exit 0
+[ -n "${DSP_HOOK_LOG:-}" ] && printf 'stop-gate ran active=%s transcript=%s\n' "$active" "$transcript" >> "$DSP_HOOK_LOG"
 [ "$active" = "true" ] && exit 0
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
 
-DRUPAL_PATH='modules/custom|themes/custom|/config/|\.(module|install|theme|services\.yml|routing\.yml|permissions\.yml|php)'
+# Count edits to Drupal-shaped paths. Tool input key order is NOT stable (Edit serialises replace_all
+# before file_path), so pair each Edit/Write/MultiEdit tool_use with the file_path in the same record
+# instead of anchoring on a key sequence.
+edited=$(python3 - "$transcript" <<'PY' 2>/dev/null || echo 0
+import json, re, sys
+PATH_RE = re.compile(r'modules/custom|themes/custom|/config/'
+                     r'|\.(module|install|theme|profile|engine|services\.yml|routing\.yml|permissions\.yml)$'
+                     r'|(modules|themes|profiles|core)/.*\.php$')
+WRITE_RE = re.compile(r'(sed -i|tee |cat *>|(^|[^0-9&])>>? *[^&/ ]|python3? -|php -r)')
+NOWRITE_RE = re.compile(r'>>? */dev/null')
+paths, n = set(), 0
+for line in open(sys.argv[1], errors="replace"):
+    try: ev = json.loads(line)
+    except Exception: continue
+    msg = ev.get("message") or {}
+    for c in (msg.get("content") if isinstance(msg.get("content"), list) else []) or []:
+        if not isinstance(c, dict) or c.get("type") != "tool_use": continue
+        name, inp = c.get("name"), c.get("input") or {}
+        if name in ("Edit", "Write", "MultiEdit"):
+            p = inp.get("file_path") or ""
+            if p and PATH_RE.search(p): paths.add(p)
+        elif name == "Bash":
+            cmd = inp.get("command") or ""
+            if WRITE_RE.search(cmd) and not NOWRITE_RE.search(cmd) and PATH_RE.search(cmd): n += 1
+print(len(paths) + n)
+PY
+)
+[ "${edited:-0}" -eq 0 ] 2>/dev/null && exit 0
 
-# Edits made with the Edit/Write/MultiEdit tools (anchored on the tool name, so Read calls do not count).
-edited=$(grep -oE '"name":"(Edit|Write|MultiEdit)","input":\{"file_path":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null | grep -E "$DRUPAL_PATH" | sort -u | wc -l | tr -d ' ')
-# Edits performed through Bash: sed -i, tee, heredoc/redirect writes (not 2> or >/dev/null), python/php writers.
-bashed=$(grep -oE '"name":"Bash","input":\{"command":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null \
-  | grep -E '(sed -i|tee |cat *>|(^|[^0-9&])>>? *[^&/ ]|python3? -|php -r)' | grep -Ev '>>? */dev/null' | grep -E "$DRUPAL_PATH" | wc -l | tr -d ' ')
-edited=$(( ${edited:-0} + ${bashed:-0} ))
-[ "$edited" -eq 0 ] && exit 0
-
-# Verification report markers in the TEXT blocks of the last assistant message only.
+# Verification markers in the TEXT of the last assistant message only.
 last=$(grep '"role":"assistant"' "$transcript" | tail -1 | grep -oE '"type":"text","text":"([^"\\]|\\.)*"')
 if printf '%s' "$last" | grep -Eq 'NOT VERIFIED|NOT APPLICABLE|VERIFY L[123]|Verified:|Not verified:'; then exit 0; fi
 
-ctx="drupal-superpowers: $edited Drupal file(s) were edited in this session but the reply has no verification report. Use the drupal-verification skill (drupal-superpowers:drupal-verification) and end with a short report: what was verified (coding standards, static analysis, tests, runtime) and what is NOT VERIFIED with the reason. Keep the rest of your reply as it was."
+ctx="drupal-superpowers: $edited Drupal file(s) were edited in this session but the reply has no verification report. Use the drupal-verification skill (drupal-superpowers:drupal-verification) and end with a short report: what was verified (coding standards, static analysis, tests, runtime), what is NOT VERIFIED with the reason, and the git add/commit commands the user can paste (nothing staged or committed by you). Keep the rest of your reply as it was."
 [ -n "${DSP_HOOK_LOG:-}" ] && printf 'stop-gate BLOCK edited=%s\n' "$edited" >> "$DSP_HOOK_LOG"
 printf '{"decision":"block","reason":%s}\n' "$(dsp_json quote "$ctx")"
 exit 0

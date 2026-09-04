@@ -13,7 +13,7 @@ Through the adapter (`ddev drush …`). With MCP Tools: `get_config_status`, `ge
 | Direction | Likely meaning | Action |
 |---|---|---|
 | Only in sync dir | repo has config the site lacks (new module config not imported; module missing on site) | import (after checking the module is enabled) |
-| Only in active | site has config the repo lacks (module enabled locally; editor created something) | export if intended, uninstall/delete if not |
+| Only in DB (active) | site has config the repo lacks (module enabled locally; editor created something) | export if intended, uninstall/delete if not |
 | Different | values changed on one side | read the diff; editor change on prod → export first; code/deploy change → import |
 | Same config, UUID differs | site reinstalled or config re-created | align UUIDs deliberately (`config:set … uuid` on LOCAL) or re-export; never `--partial` blindly |
 | Import fails: dependency | config references a missing module/config | enable the module or fix `dependencies:` |
@@ -30,6 +30,6 @@ Through the adapter (`ddev drush …`). With MCP Tools: `get_config_status`, `ge
 ## Report
 ```
 VERIFY L2 config:status PASS "ddev drush config:status" no differences
-VERIFY L2 cim-preview  NOT VERIFIED adapter=none
+VERIFY L2 cim --diff --no  NOT VERIFIED adapter=none
 ```
 Or list the drift items with the decision per item.

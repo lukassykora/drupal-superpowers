@@ -21,11 +21,10 @@ fi
 
 read -r KIND ROOT <<<"$(dsp_find_root "$(dirname "$file")")"
 if [ "$KIND" != "none" ] && [ -x "$ROOT/vendor/bin/phpcs" ] && [ -z "$out" ]; then
-  std=""
-  for c in phpcs.xml phpcs.xml.dist .phpcs.xml .phpcs.xml.dist; do [ -f "$ROOT/$c" ] && { std="--standard=$ROOT/$c"; break; }; done
-  [ -z "$std" ] && std="--standard=Drupal,DrupalPractice"
-  res=$( (cd "$ROOT" && vendor/bin/phpcs -q --report=summary $std "$file" 2>/dev/null) | grep -E 'A TOTAL OF' | head -1)
-  [ -n "$res" ] && out="phpcs ($std): $res in $(basename "$file"). Run phpcbf for auto-fixable ones."
+  std=(--standard=Drupal,DrupalPractice)
+  for c in phpcs.xml phpcs.xml.dist .phpcs.xml .phpcs.xml.dist; do [ -f "$ROOT/$c" ] && { std=(--standard="$ROOT/$c"); break; }; done
+  res=$( (cd "$ROOT" && vendor/bin/phpcs -q --report=summary "${std[@]}" "$file" 2>/dev/null) | grep -E 'A TOTAL OF' | head -1)
+  [ -n "$res" ] && out="phpcs (${std[*]}): $res in $(basename "$file"). Run phpcbf for auto-fixable ones."
 fi
 
 [ -z "$out" ] && exit 0

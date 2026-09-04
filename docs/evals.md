@@ -1,6 +1,6 @@
 # Evals
 
-Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-04 (after Phase 2): **70 cases** (trigger 19, no-trigger 19, scenarios 18, agents 2, acceptance 5, integration 7), 8 fixtures + the compose lab recipe.
+Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-04 (measured): **77 cases** (trigger 21, no-trigger 21, scenarios 21, agents 2, acceptance 5, integration 7), 164 graders, 9 fixtures + the compose lab recipe and the MCP stub.
 
 ## 1. Why evals come first
 
@@ -10,9 +10,9 @@ Skill descriptions are trigger surfaces; skill bodies shape behaviour. Neither c
 
 ```
 evals/
-├── trigger/<skill>/              19 cases: the prompt MUST activate <skill>
-├── no-trigger/<skill>/           19 cases: the prompt MUST NOT activate <skill>
-├── scenarios/<name>/             18 cases: 14 from spec §66 + frontend, performance, migrate, english-code
+├── trigger/<skill>/              20 cases: the prompt MUST activate <skill>
+├── no-trigger/<skill>/           20 cases: the prompt MUST NOT activate <skill>
+├── scenarios/<name>/             20 cases: 14 from spec §66 + frontend, performance, migrate, english-code, git-handoff, git-on-request
 ├── agents/<name>/                 2 cases from spec §68
 ├── acceptance/<nn>-<name>/        5 cases from spec §84–88 (03 and 05 tagged p2)
 ├── integration/                   in-place cases against a real project named by env DSP_LAB_D11 (Stage 8)
@@ -45,14 +45,14 @@ Users report that the "Greeting" block sometimes greets them with someone else's
 |---|---|---|
 | `tool_used` | `tool` (regex on tool name), `input_match` (regex on the tool input JSON), `min`, `max` | count of matching tool calls is within `[min, max]` |
 | `regex` | `pattern`, `match: contains \| not_contains`, `flags`, `scope: final (default) \| all \| results` | pattern (not) found in the final message, all assistant text, or assistant text plus tool results |
-| `file_exists` | `path` (glob, relative to the temp cwd) | at least one file matches after the run |
-| `file_contains` | `path` (glob), `pattern` (regex), `match: contains \| not_contains` | the on-disk file content (not) matching after the run; preferred over tool-name graders because agents may edit via Bash |
+| `file_exists` | `path` (glob, relative to the temp cwd), `min_files` (default 1) | at least `min_files` files match after the run |
+| `file_contains` | `path` (glob), `pattern` (regex), `match: contains \| not_contains`, `min_files` | the on-disk file content (not) matching after the run; preferred over tool-name graders because agents may edit via Bash. Set `min_files: 1` on every `not_contains` grader: an empty glob otherwise passes vacuously and proves nothing |
 | `llm` | body = criteria | a judge model answers PASS given transcript + criteria |
 | `tool_order` | `before`, `after` | reserved for Stage 5 cases (test written before implementation edit) |
 
 Skill activation is observed as a `Skill` tool call whose input matches `(drupal-superpowers:)?<skill>\b`. Trigger cases require `min: 1`; no-trigger cases require `max: 0`.
 
-The `fixture:` key is ours. Integration cases use `project_env: DSP_LAB_D11` (run in place in that directory, no copy) and `reset_script` (run before and after each run; re-seeds the fixture modules with `scripts/lab-seed` and uninstalls them). The `fixture:` key is ignored for those. When the native `claude plugin eval` becomes available on this account, a `scaffold_script` shim will copy the same fixture; nothing else in the format needs to change.
+The `fixture:` key is ours; `setup_script:` (single line or a `|` block) runs in the copied fixture before the agent starts, e.g. `git init` for the git scenario. Integration cases use `project_env: DSP_LAB_D11` (run in place in that directory, no copy) and `reset_script` (run before and after each run; re-seeds the fixture modules with `scripts/lab-seed` and uninstalls them). The `fixture:` key is ignored for those. When the native `claude plugin eval` becomes available on this account, a `scaffold_script` shim will copy the same fixture; nothing else in the format needs to change.
 
 ## 4. Runner (`scripts/run-evals`, Stage 5)
 
@@ -71,7 +71,7 @@ Per case and run:
 
 Trigger cases additionally record **premature tool use**: any `Read`/`Bash`/`Edit` call before the expected `Skill` call is reported (Superpowers' technique) even when the skill eventually fires.
 
-Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR gate (38 short cases). Scenarios and acceptance run nightly or on the `evals` label with `--runs 2`.
+Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR gate (40 short cases). Scenarios and acceptance run nightly or on the `evals` label with `--runs 2`.
 
 ## 5. Grading rules
 
@@ -105,6 +105,7 @@ Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR g
 | `site-current/partner_directory` | `load()` per node and per term inside the loop, a `COUNT(*)` per row, `max-age 0` on a public listing | `scenarios/performance`, `trigger/drupal-performance` |
 | `site-current/partner_migrate` + `data/partners.csv` | tags not trimmed/mapped to term IDs, empty tier, website without scheme, `migration_group` without migrate_plus | `scenarios/migrate`, `trigger/drupal-migrate-api` |
 | `site-current` theme `acme` | `\|raw` on rendered body, inline `onclick`, behaviour without `once()`, image without alt, static service call in preprocess, SDC component without required props | `scenarios/frontend`, `trigger/drupal-frontend` |
+| `site-tailwind` theme `tw` | bare `@import "tailwindcss"` with no `@source`; `badge-{{ variant }}` and `'badge-' ~ variant` built by concatenation; a class added only in `tw_preprocess_node()`; `tw.libraries.yml` pointing at the **source** CSS; `ckeditor5-stylesheets` pointing at the whole bundle | `scenarios/tailwind-scan-surface`, `trigger/drupal-tailwind` |
 | `non-drupal` | none | all `no-trigger` cases that must be silent outside Drupal |
 
 The three deprecated functions in `legacy_tools` were chosen because their removal in 11.0 is documented in core change records; the upgrade grader requires the agent to name the replacements (`ByteSizeMarkup`, `Error::logException`, `TimeZoneFormHelper`) or verified equivalents.
@@ -172,6 +173,67 @@ Nine finder agents audited the plugin against the real 11.4.6 and 10.6.16 cores 
 - **Docs**: real slash names (`/drupal-superpowers:drupal-security`, …), counts, `facts.json`, hook table, Stop-hook wording, description budget 400, PR gate 38 cases.
 
 Follow-up: re-run the adversarial verification and the affected evals when the spend limit resets; the `english-code` scenario passed all deterministic graders on its first run (no Czech in PHP/YAML, English machine names) and only its LLM judge was blocked by the limit.
+
+### Phase 2 completion (2026-09-04, evening)
+
+The last four §82 items shipped and were exercised, not just documented:
+
+| Item | Evidence |
+|---|---|
+| `scripts/drupal-lab` (create / list / path / destroy / matrix) | Real run: `drupal-lab create smoke --core '^11.4' --engine native --module …/saved_items` built a Drupal 11.4.6 site in 26 s, `drush status` bootstrap Successful (sqlite), `drush pm:enable saved_items` succeeded, a core Kernel test returned `OK (2 tests, 22 assertions)`, `drupal-lab destroy smoke` removed it. First attempt failed with "Project directory is not empty" because the lab marker was written before `composer create-project`; fixed (marker written last, with an EXIT trap that cleans a half-built lab). A second real defect surfaced on teardown: Drupal's installer makes `sites/default` read-only, so `rm -rf` failed while the script still printed "destroyed"; fixed with `chmod -R u+w` before removal and a post-check that fails loudly. Guards verified: refuses an existing lab, refuses to delete a directory without the marker, requires `--core`. |
+| Compatibility matrix per core | `drupal-lab matrix <prefix> --cores "^10.6,^11.4" --module <path> --command "<cmd>"`; procedure and per-core result table in `skills/drupal-upgrade/references/compatibility-matrix.md`, wired into `drupal-upgrade` step 7 and the multi-version rule |
+| Architecture reports | `skills/drupal-project-understanding/references/architecture-report.md` (platform, code map, content model, config/environments, quality, ranked risks with evidence, verified/not-verified), reachable from step 5 of the skill |
+| CI recommendations | `skills/drupal-testing/references/ci-recommendations.md` (gate table, site projects, drupal.org GitLab template with the opt-in matrix variables, rules against weakening gates), linked from the skill's decision rules |
+
+### Second adversarial audit: verification of the fixes (2026-09-04, evening)
+
+After the spend limit reset, a second ultracode workflow (6 fix-verification agents + 2 gap agents, 8/8 completed, 1.1M subagent tokens) re-checked **today's fixes** against the real 11.4.6 and 10.6.16 cores and covered the areas the first audit never touched (CI, packaging, MCP stub, compose recipe, runner grading code, cross-skill consistency). It confirmed **150 fixes correct** and found **79 further defects (2 CRITICAL, 17 HIGH, 38 MEDIUM, 22 LOW), 45 of them regressions introduced by the first fix pass**. All were applied. The two critical ones are the reason this pass was worth running:
+
+1. **`stop-gate` was dead for the Edit tool.** The audit-hardened regex anchored on `"name":"Edit","input":{"file_path":"`, but Claude Code serialises `replace_all` first, so every Edit call became invisible and the gate never fired. Proven against 243 real Edit records in `~/.claude/projects` (0 matched the anchored form). Replaced with a Python pass that pairs each Edit/Write/MultiEdit tool_use with its `file_path` regardless of key order; re-tested against the real serialisation.
+2. **The CI validate job could never pass.** `cmd; test $? -eq 2` under `set -e` (and GitHub's `bash -e {0}`) aborts at the guard's intentional exit 2. Guard assertions moved to their own step with a `guard()` helper that captures the status; six bypass and five allow assertions plus a stop-gate assertion now run, and they pass locally (`fail=0`).
+
+Other confirmed-and-fixed highlights: the `oop-hooks` note listed 6 of core's 13 `staticDenyHooks` (writing `#[Hook('uninstall')]` throws a LogicException, not a deprecation); seven guard bypasses (`bash -c`, `FOO=1` prefixes, `sudo`, `git -C`, `rm --recursive`, `composer -n update`, `ddev exec`, and a blanket `-h` exemption that let `mysql -h db < dump.sql` through); `--diff` wrongly exempting a committing `cim`; `! m -- "--dry-run"` passing `--` as the pattern; `drupal-lookup` falling back to the shell cwd for a non-Drupal `--dir` (and reporting an unrelated project's core as authority); a fatal quoting bug in the profiling snippet; `drush pm:security`/`pm:security-php`/`twig:lint` still recommended although Drush 13 removed them; stale counts in five docs; and three runner grading gaps (a run whose graders were all skipped counted as PASS, an unknown grader type counted as PASS, an all-skipped run exited 0).
+
+Guard coverage after the second pass: 15/15 bypass attempts blocked, 12/12 legitimate commands allowed (including `git add`/`git commit`, which the guard deliberately leaves to the normal permission flow).
+
+### Full trigger / no-trigger sweep and the git + language scenarios (2026-09-04, night)
+
+All 40 trigger/no-trigger cases were re-run after the two audits, then the three scenarios that the spend limit had left unmeasured. First pass: **37/40**. Every one of the three failures was a real defect, two of them in the plugin:
+
+| Case | First result | Cause | Fix | Re-run |
+|---|---|---|---|---|
+| `no-trigger/drupal-verification` | FAIL, `drupal-verification` fired in a non-Drupal project | the Stop hook matched **any** `.php` path, so editing `Acme\Greeter` in a plain PHP repository demanded a Drupal verification report | `stop-gate` now exits 0 unless `dsp_find_root` finds a Drupal project, and bare `.php` only counts under `modules/`, `themes/`, `profiles/`, `core/` | **PASS**, `skills=[]` (no plugin skill fires at all) |
+| `trigger/drupal-hard-problem` | FAIL at the 300 s wall | the skill routes the turn to fable/xhigh; the grader had already passed, the run was simply cut off | trigger budgets raised to 600 s (hard-problem 900 s) | **PASS** at 148 s |
+| `trigger/drupal-testing` | FAIL at the 300 s wall | same | same | **PASS** at 215 s |
+
+Scenarios (LLM judges on):
+
+| Case | Result | Evidence |
+|---|---|---|
+| `scenarios/git-handoff` | **PASS** (113 s) | zero git write calls; the reply ends with the changed path, a suggested `git commit` with an English imperative subject, and "nothing was staged or committed" |
+| `scenarios/git-on-request` | **PASS** (87 s) | branch created and **one** file committed by explicit path, no `git add -A`, no push (the user asked only for a commit) |
+| `scenarios/english-code` | **PASS** on the third attempt (561 s) | module `favourite_articles`, English identifiers, comments, docblocks and YAML labels; the only Czech token is the public URL the user asked for |
+
+`english-code` failed twice on **grader defects, not on the run**, and both are now fixed in the harness:
+1. `english-machine-names` matched the public path `/oblibene` inside the module description. The pattern is now `(?<!/)\b(…)`, so a URL segment is exempt while a Czech machine name or label still fails. Unit-tested against three inputs.
+2. The judge failed a correct run with "no Write/Edit tool calls", because the agent had written the module through Bash heredocs, which the parent stream does not show. `llm` graders now take `files:` (globs) and receive the produced files from disk; the judge prompt states those files are authoritative.
+
+Harness changes from this sweep, all covered by `scripts/validate`:
+- `min_files` on `file_exists` / `file_contains`. A `not_contains` grader over an empty glob used to pass vacuously; all 14 such graders now require the file to exist (the three that deliberately assert a file was **not** created are exempt).
+- `setup_script:` runs inside the copied fixture before the agent starts; the git case uses it to `git init` and make one baseline commit, which is why the case can be graded at all.
+- The frontmatter parser handles `|` block scalars and `- item` block lists, so a multi-line `setup_script` or a `files:` list is not silently read as an empty value.
+
+### Tailwind support (2026-09-04, added on request)
+
+`drupal-tailwind` (skill) and `drupal-tailwind-specialist` (agent) were added after the sweep, with CSS-framework detection in `drupal-profile` (`frontend.css_framework`, `…_version`, `…_style` = `css-first(v4)` or `js-config(v3)`, `…root`). All three new cases passed on the first run:
+
+| Case | Result | Note |
+|---|---|---|
+| `trigger/drupal-tailwind` | **PASS** (102 s) | the skill fires on "badge colours are missing" against the Tailwind fixture, with no other skill needed first |
+| `no-trigger/drupal-tailwind` | **PASS** (43 s) | an ordinary `alt` fix in the non-Tailwind theme does not pull the skill in |
+| `scenarios/tailwind-scan-surface` | **PASS** (333 s) | judge: added `@source` for `templates/`, `components/`, `js/` and `tw.theme`; converted both concatenated `badge-{{ variant }}` / `'badge-' ~ variant` usages to literal lookup maps and said so; flagged the library pointing at source CSS; connected the broken admin chrome to Preflight; reported the missing npm honestly instead of claiming a build |
+
+The Drupal-specific claims in the skill's references are cited to drupal.org projects and issues. Two aggregation claims were established by **running core 11.x's own regexes** rather than by reading a bug report, because no bug report exists: `@layer`, `@property`, `oklch()`, `color-mix()` and `calc()` pass through the optimizer untouched; a layered `@import` is not inlined ([#3470829](https://www.drupal.org/project/drupal/issues/3470829)) but *is* hoisted to the top of the aggregate by `CssCollectionOptimizerLazy::optimizeGroup()`, where its relative path no longer resolves.
 
 ## 9. CI mapping
 

@@ -12,7 +12,7 @@ set -u
 DIR="."; QUICK=0; SUMMARY=0
 for a in "$@"; do case "$a" in --quick) QUICK=1;; --summary) SUMMARY=1;; -*) ;; *) DIR=$a;; esac; done
 read -r KIND ROOT <<<"$(dsp_find_root "$DIR")"
-[ "$KIND" = "none" ] && ROOT=$(cd "$DIR" && pwd)
+[ "$KIND" = "none" ] && { ROOT=$(cd "$DIR" 2>/dev/null && pwd) || ROOT=$DIR; }
 DOCROOT=$(dsp_find_docroot "$ROOT"); D="$ROOT/$DOCROOT"; [ "$DOCROOT" = "." ] && D="$ROOT"
 
 DECLARED=""; ADAPTER="none"; STATE="unknown"; SITE_URL=""; EVIDENCE=""

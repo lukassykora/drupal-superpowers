@@ -19,7 +19,7 @@ Twig templates and preprocess, theme libraries and assets, JS behaviours, SDC co
 
 ## Procedure
 
-1. **Orient in the theme**: base theme, regions, `*.libraries.yml`, existing components (`components/`), build tooling (profile `frontend.*`: package manager, Vite/Webpack), CSS conventions (BEM, utility classes), existing `templates/` naming. Follow what exists.
+1. **Orient in the theme**: base theme, regions, `*.libraries.yml`, existing components (`components/`), build tooling (profile `frontend.*`: package manager, Vite/Webpack, `css_framework`), CSS conventions (BEM, utility classes), existing `templates/` naming. Follow what exists. When `css_framework` is `tailwind`, the CSS pipeline is `drupal-tailwind`'s job, not this skill's.
 2. **Templates** ([references/twig.md](references/twig.md)): autoescape stays on; render fields with `{{ content.field }}` or `{{ content|without(...) }}`, never `|raw` on field or user data; attributes through `{{ attributes }}`/`addClass()`; `{% trans %}` or `{{ 'text'|t }}` for UI strings; suggestions via `hook_theme_suggestions_HOOK_alter` or `hook_preprocess_HOOK`, not copied templates for every bundle.
 3. **Preprocess** (`*.theme`): compute variables; `\Drupal::` is acceptable there as in any procedural hook, but prefer render arrays built by the module, and add cacheability for anything fetched: `$variables['#cache']['contexts'|'tags']`.
 4. **Assets** ([references/libraries-behaviors.md](references/libraries-behaviors.md)): every JS/CSS goes through `*.libraries.yml` and is attached (`#attached`, `{{ attach_library() }}`, `libraries:` in info.yml for global); JS is a `Drupal.behaviors.<name>.attach(context, settings)` using `once('name', selector, context)`; data to JS via `drupalSettings`, never inline `<script>` or `onclick`.
@@ -38,7 +38,7 @@ Twig templates and preprocess, theme libraries and assets, JS behaviours, SDC co
 
 ## Works with process skills
 
-Design-time: fills the UI rows of `drupal-architecture`'s review. Long UI work with browser tooling goes to the `drupal-frontend-specialist` agent; reviews use this skill as the theme lens next to `drupal-security` (escaping) and `drupal-cacheability`.
+Design-time: fills the UI rows of `drupal-architecture`'s review. Tailwind pipelines (source globs, safelists, Preflight, v3→v4) go to `drupal-tailwind`. Long UI work with browser tooling goes to the `drupal-frontend-specialist` agent; reviews use this skill as the theme lens next to `drupal-security` (escaping) and `drupal-cacheability`.
 
 ## Red flags
 

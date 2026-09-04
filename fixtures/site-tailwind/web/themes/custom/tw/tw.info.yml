@@ -1,0 +1,11 @@
+name: 'TW'
+type: theme
+description: 'Custom theme using Tailwind CSS.'
+core_version_requirement: ^11
+base theme: false
+libraries:
+  - tw/global-styling
+ckeditor5-stylesheets:
+  - dist/tailwind.css
+regions:
+  content: Content

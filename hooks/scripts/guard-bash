@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) guard: block destructive Drupal/database/git commands unless the environment is
-# DISPOSABLE (spec §52–53). Exit 2 = block with reason on stderr. Exit 0 = allow.
-# The destructive list below is the single source of truth; evals/scenarios/dangerous-env and
-# scripts/validate exercise it. Hardened on 2026-09-04 after an adversarial audit (see docs/security.md §2).
+# PreToolUse(Bash) guard: deny destructive Drupal/database/git commands unless the environment is
+# DISPOSABLE (spec §52–53). Exit 2 = block with the reason on stderr. Exit 0 = normal permission flow.
+# Ordinary git writes (add/commit/push) are NOT blocked here: they go through Claude Code's own
+# permission prompt, and the skills forbid them unless the user asked (drupal-verification/git-handoff).
+# The destructive list is the single source of truth; scripts/validate and evals/scenarios/dangerous-env
+# exercise it. Hardened twice on 2026-09-04 after two adversarial audits (docs/security.md §2).
 set -u
 PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 . "$PLUGIN/scripts/lib/common.sh"
@@ -19,46 +21,63 @@ rm -f "$tmp"
 
 read -r KIND ROOT <<<"$(dsp_find_root "$cwd")"
 DOCROOT=""; [ "$KIND" != "none" ] && DOCROOT=$(dsp_find_docroot "$ROOT")
-esc() { printf '%s' "$1" | sed 's/[.[\*^$/]/\\&/g'; }
+# Escape the full ERE metacharacter set: project paths may contain ( ) + ? { } | as well as . [ * ^ $ /
+esc() { printf '%s' "$1" | sed 's/[][\\.*^$+?(){}|/]/\\&/g'; }
 ROOT_RE=$(esc "$ROOT"); DOC_RE=$(esc "${DOCROOT:-__none__}")
 
-# ---- Normalise: drop quotes/backslashes, strip runtime wrappers, Drush site aliases and global options,
-# so "ddev drush @self --root=web site:install", "docker compose exec php vendor/bin/drush sql:drop" and
-# "$DRUSH sql:drop" all reduce to a comparable form. Segments are split on ; | && || newline.
-norm=$(printf '%s' "$cmd" | tr -d '"'"'"'\\' | tr '\n' ';' \
-  | sed -E 's/(ddev|lando) +//g; s#(docker +compose|docker-compose)( +-p +[A-Za-z0-9_-]+)? +exec +(-T +)?[a-zA-Z0-9_-]+ +##g; s#[A-Za-z0-9_./-]*vendor/bin/##g; s/\$\{?DRUSH\}?/drush/g; s/ +/ /g' \
+# ---- Normalise so wrappers, aliases and global options cannot hide the real command.
+norm=$(printf '%s' "$cmd" | tr -d '"'"'"'\\' | tr '\n\t' '; ' \
+  | sed -E '
+      s/(^|[;&|] *)(sudo|env|command|nohup|time|exec|xargs)( +-[A-Za-z0-9]+)* +/\1/g;
+      s/(^|[;&|] *)([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)+/\1/g;
+      s/(bash|sh|zsh|dash) +-[a-z]*c +//g;
+      s/(ddev|lando)( +(exec|ssh))?( +-s +[^ ]+)? +//g;
+      s#(docker +compose|docker-compose)( +-p +[A-Za-z0-9_-]+)? +exec +(-T +)?[a-zA-Z0-9_-]+ +##g;
+      s#[A-Za-z0-9_./-]*vendor/bin/##g;
+      s/\$\{?DRUSH\}?/drush/g;
+      s/^git( +(-C +[^ ]+|--no-pager|--git-dir=[^ ]+|--work-tree=[^ ]+|-c +[^ ]+))+/git/;
+      s/(^|[;&|] *)composer( +--?[A-Za-z][A-Za-z0-9-]*(=[^ ]*)?)+ +/\1composer /g;
+      s/[[:space:]]+/ /g' \
   | sed -E 's/drush( +(@[A-Za-z0-9._@-]+|--?[A-Za-z][A-Za-z0-9-]*(=[^ ]*)?|-r +[^ ]+|-l +[^ ]+))*/drush/g')
 
+# A piped database client reads SQL from stdin no matter which segment it lands in.
+PIPED_SQL=0
+printf '%s' "$norm" | grep -Eq '\| *(mysql|mariadb|psql|sqlite3|drush +sql:cli|drush +sqlc)' && PIPED_SQL=1
+
 reason=""
-T='([ ;&|)]|$)'   # command terminator
+T='([ ;&|)]|$)'
 IFS=';|' read -r -a segs <<<"$(printf '%s' "$norm" | sed -E 's/&&/;/g; s/\|\|/;/g')"
 for seg in "${segs[@]}"; do
-  seg=$(printf '%s' "$seg" | sed -E 's/^ +//; s/ +$//')
+  seg=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
   [ -z "$seg" ] && continue
-  case "$seg" in echo\ *|printf\ *|\#*) continue;; esac   # segments that only print text
-  case "$seg" in grep\ *|rg\ *|ag\ *|cat\ *|head\ *|tail\ *|less\ *|awk\ *|wc\ *|diff\ *|ls\ *|stat\ *|file\ *|sed\ -n*) continue;; esac   # read-only text tools; their arguments may quote dangerous words
-  printf '%s' "$seg" | grep -Eq -- '(^| )(--help|-h)( |$)|^drush help |^composer help ' && continue
+  case "$seg" in echo\ *|printf\ *|\#*) continue;; esac                                   # printing only
+  case "$seg" in grep\ *|rg\ *|ag\ *|cat\ *|head\ *|tail\ *|less\ *|awk\ *|wc\ *|diff\ *|ls\ *|stat\ *|file\ *|sed\ -n*) continue;; esac
   m() { printf '%s' "$seg" | grep -Eqi -- "$1"; }
+  # Help only when it is the inspected command's own flag, never a bare -h belonging to another option.
+  m '^(drush|composer|git|ddev|lando)( +[a-z:_-]+)* +(--help|-h)$' && continue
+  m '^(drush|composer|git) +help( |$)' && continue
   if m "^drush (sql-drop|sql:drop)$T"; then reason="drush sql:drop destroys the database"
   elif m "^drush (site:install|site-install|si|sin)$T"; then reason="drush site:install reinstalls the site and wipes its database"
-  elif m "^drush (cim|config:import|config-import)$T" && ! m "(--diff|--no)( |$)"; then reason="drush config:import overwrites active configuration; non-interactive shells auto-confirm the prompt (use config:status or cim --diff --no first)"
+  elif m "^drush (cim|config:import|config-import)$T"; then
+    # Only a form that cannot commit is safe: --no or --simulate, and never together with -y/--yes.
+    if m '(^| )(--no|--simulate)( |$)' && ! m '(^| )(-y|--yes)( |$)'; then :
+    else reason="drush config:import overwrites active configuration and non-interactive shells auto-confirm the prompt (inspect with 'drush config:status' or 'drush cim --diff --no')"; fi
   elif m "^drush (entity:delete|entity-delete|edel)$T"; then reason="drush entity:delete removes content"
   elif m "^drush (sql:query|sql-query|sqlq)( .*)?(drop |delete |truncate |--file)"; then reason="destructive or file-fed SQL via drush sql:query"
-  elif m "^drush (sql:cli|sql-cli|sqlc)"; then reason="drush sql:cli with piped or redirected input can run arbitrary SQL"
+  elif m "^drush (sql:cli|sql-cli|sqlc)" && { [ $PIPED_SQL -eq 1 ] || m '<'; }; then reason="drush sql:cli fed from a pipe or a file can run arbitrary SQL"
   elif m "^drush (sql:sync|sql-sync)$T"; then reason="drush sql:sync overwrites a database"
   elif m "^drush (pm:uninstall|pmu|pm-uninstall|un)$T"; then reason="uninstalling a module deletes its data and config"
   elif m "^drush (user:password|upwd|user-password)$T"; then reason="changing user passwords"
-  elif m "^(mysql|mariadb|psql|sqlite3)( .*)? *<"; then reason="SQL fed from a file into the database client"
-  elif m "(^|[ (])drop +(table|database)"; then reason="DROP TABLE/DATABASE"
-  elif m "(^|[ (])(delete +from|truncate( +table)?) +[a-z_\`{}]+( *;|[\")]|$)"; then reason="DELETE/TRUNCATE without a WHERE clause"
-  elif m "^rm +(-[a-z]+ +)*-[a-z]*r[a-z]*( +-[a-z]+)* +(\./)?(/|~|\.|\.\.|\*|\\\$HOME|${ROOT_RE}/?|${DOC_RE}/?|sites/?|config/?)( |$)"; then reason="rm -rf on the project root, docroot, sites/, config/, or a system path"
+  elif m "^(mysql|mariadb|psql|sqlite3)" && { [ $PIPED_SQL -eq 1 ] || m '<'; }; then reason="SQL fed from a file or a pipe into the database client"
+  elif m "^(mysql|mariadb|psql|sqlite3|drush)( .*)?(drop +(table|database)|truncate|delete +from)"; then reason="destructive SQL statement"
+  elif m "^rm +((-[a-zA-Z]+|--[a-z-]+|--) +)*" && m "^rm +((-[a-zA-Z]*r[a-zA-Z]*|--recursive|-[a-zA-Z]+|--[a-z-]+|--) +)*(/|~|\.|\.\.|\*|\\\$HOME|${ROOT_RE}/?|${DOC_RE}/?|(${DOC_RE}/)?(sites|config|modules|themes)(/[^ ]*)?)( |$)" && m "(-[a-zA-Z]*r|--recursive)"; then reason="rm -r on the project root, docroot, sites/, config/, modules/, themes/, or a system path"
   elif m "^find +(\.|/|${ROOT_RE})([ /].*)?(-delete|-exec +rm)"; then reason="find -delete/-exec rm over the project tree"
   elif m "^git +reset +--hard"; then reason="git reset --hard discards uncommitted work"
   elif m "^git +clean +-[a-z]*f"; then reason="git clean -f deletes untracked files"
   elif m "^git +push .*(--force( |$)|-f( |$)| \+[A-Za-z0-9_./-])" && ! m "force-with-lease"; then reason="force push rewrites shared history (use --force-with-lease if you must)"
   elif m "^composer +(update|upgrade|up|u)( |$)"; then
     pk=$(printf '%s' "$seg" | sed -E 's/^composer +(update|upgrade|up|u)//; s/ --?[A-Za-z][A-Za-z0-9-]*(=[^ ]*)?//g; s/ +//g')
-    if [ -z "$pk" ] && ! m -- "--dry-run"; then reason="unbounded composer update changes every dependency (name the packages, or use --dry-run)"; fi
+    if [ -z "$pk" ] && ! m '(^| )--dry-run( |$)'; then reason="unbounded composer update changes every dependency (name the packages, or use --dry-run)"; fi
   fi
   [ -n "$reason" ] && break
 done

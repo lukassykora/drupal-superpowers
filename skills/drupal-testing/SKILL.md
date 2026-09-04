@@ -32,9 +32,9 @@ Before implementing (test plan and RED test), when a test fails, when setting up
 
 - Kernel over Unit when the Unit test would mock more than two Drupal services.
 - Functional over Kernel only when the route, permission, or rendered page is the behaviour.
-- One test class per behaviour cluster; `@covers`/`#[CoversClass]` when the project uses them; PHPUnit attributes (`#[Group]`, `#[Test]`) on PHPUnit 10+ projects, annotations on older ones (check `packages.phpunit` in the profile).
+- One test class per behaviour cluster; `@covers`/`#[CoversClass]` when the project uses them. Style follows the installed PHPUnit (`packages.phpunit` in the profile): 10.x pins PHPUnit 9, so annotations (`@group`); 11.x ships PHPUnit 11, so attributes (`#[Group]`, `#[RunTestsInSeparateProcesses]`).
 - Long or noisy runs go to the `drupal-test-engineer` agent; it returns per-failure causes, not logs.
-- Project frameworks: [references/project-frameworks.md](references/project-frameworks.md).
+- Project frameworks: [references/project-frameworks.md](references/project-frameworks.md). CI gates and pipeline advice (only when asked or when a declared gate is missing): [references/ci-recommendations.md](references/ci-recommendations.md).
 
 ## Works with process skills
 

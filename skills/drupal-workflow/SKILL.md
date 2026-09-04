@@ -5,7 +5,7 @@ description: Use when asked to build, change, or fix something in a Drupal proje
 
 # Drupal workflow (standalone fallback)
 
-If `superpowers:brainstorming`, `superpowers:systematic-debugging`, or `superpowers:writing-plans` is available, use those for the process and use this skill only for the Drupal phase table and the Global Constraints template. Do not run two orchestrations.
+If `superpowers:brainstorming`, `superpowers:systematic-debugging`, or `superpowers:writing-plans` is active, use those for the process and use this skill only for the Drupal phase table and the Global Constraints template. Do not run two orchestrations.
 
 **Core principle:** the amount of process matches the size of the change, decided once, out loud, from observable signals.
 
@@ -31,7 +31,7 @@ This skill orchestrates; the domain knowledge lives in the skills named below. *
 6. **Implement** — invoke `drupal-module-development` for module files; the smallest correct change; project conventions over preferences; no unrelated refactoring.
 7. **Verify** — invoke `drupal-runtime-verification` before running any command: L1 static, L2 automated, L3 live, each recorded as a `VERIFY` line.
 8. **Review** — for architectural or security/access/cache-touching changes, dispatch `drupal-code-reviewer` and/or `drupal-security-reviewer` with the diff as a file.
-9. **Gate** — invoke `drupal-verification` to build the report (two lines for trivial); only then say done.
+9. **Gate** — invoke `drupal-verification` to build the report (two lines for trivial), ending with the git handoff (nothing staged or committed; the user gets the commands). Only then say done.
 
 ## Global Constraints template
 
@@ -45,4 +45,5 @@ When writing a plan (yours or `superpowers:writing-plans`), paste [references/gl
 | "I'll fix it and then add a test" | For bugs, test first (RED) or the test proves nothing. |
 | "This needs a service, a plugin manager, and an event" | Bounded work uses the existing pattern in the module. |
 | "Let me also clean up this old code" | Out of scope; report it separately. |
+| "I'll commit so the work isn't lost" | The user owns git; print the commit command instead. |
 | "The user writes Czech, so I'll name the module in Czech" | Code, machine names, comments, and reports are English; only the conversation follows the user's language. |

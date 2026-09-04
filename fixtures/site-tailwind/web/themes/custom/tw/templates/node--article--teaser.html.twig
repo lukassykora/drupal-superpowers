@@ -1,0 +1,10 @@
+{#
+/**
+ * @file
+ * Article teaser for the TW theme.
+ */
+#}
+<article{{ attributes.addClass('flex', 'p-4') }}>
+  <span class="badge badge-{{ variant|default('primary') }}">{{ label }}</span>
+  {{ content|without('links') }}
+</article>

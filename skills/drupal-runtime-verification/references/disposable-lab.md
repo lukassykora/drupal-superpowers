@@ -11,6 +11,15 @@ An isolated, throw-away Drupal environment for module development, bug reproduct
 - Match the project's Drupal major/minor and PHP from the profile; use the project's `composer.json` constraints when the lab exists to test the project's own module.
 - Teardown is one command; say it when the lab is created.
 
+## One command
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/drupal-lab" create <name> --core '^11.4' [--php 8.3] [--module web/modules/custom/x] [--engine ddev|docker|native]
+"${CLAUDE_PLUGIN_ROOT}/scripts/drupal-lab" list
+"${CLAUDE_PLUGIN_ROOT}/scripts/drupal-lab" destroy <name>
+```
+The script picks DDEV, then Docker (`fixtures/lab-compose`), then native PHP+SQLite; writes the `.drupal-superpowers-lab` marker so the environment is DISPOSABLE; installs `drupal/core-dev` and Drush; and refuses to delete a directory it did not create. For several cores at once see `drupal-upgrade/references/compatibility-matrix.md`. The manual recipes below are the same steps by hand.
+
 ## Recipe: DDEV (preferred when `ddev` exists)
 
 ```bash

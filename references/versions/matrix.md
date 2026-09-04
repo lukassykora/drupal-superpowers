@@ -19,9 +19,10 @@ Human-readable view of the data block below. `scripts/drupal-facts class <versio
 | Branch | Class today | Security support ends | PHP | Drush |
 |---|---|---|---|---|
 | 7.x | eol (2025-01-05) | ended | 5.6–8.1 | 8 |
-| 8.x, 9.x | eol | ended | — | 10 |
-| 10.0–10.5 | eol | ended (10.5: 2026-07-01, when 11.4.0 shipped) | 8.1–8.4 | 12 |
-| 10.6 | previous (security-only) | **2026-12-09** (Drupal 10 EOL) | 8.1–8.4 | 12 |
+| 8.x | eol | ended | — | 10 |
+| 9.x | eol | ended | — | 11 |
+| 10.0–10.5 | eol | ended (10.5: 2026-07-01, when 11.4.0 shipped) | 8.1–8.4 | 12, 10.4+ also 13 |
+| 10.6 | previous (security-only) | **2026-12-09** (Drupal 10 EOL) | 8.1–8.4 | 12–13 |
 | 11.3 | previous (security-only) | 2026-12 (with 12.0.0) | 8.3–8.5 | 13 |
 | 11.4 | **current** | 2027-06 | 8.3–8.5 | 13 |
 | 11.5 | next minor, week of 2026-12-07 | | 8.3+ | 13 / 14 |

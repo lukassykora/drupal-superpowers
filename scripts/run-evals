@@ -20,11 +20,30 @@ def parse_frontmatter(text):
     if not m:
         return {}, text
     fm = {}
-    for line in m.group(1).splitlines():
+    lines = m.group(1).splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
         if not line.strip() or ":" not in line:
             continue
         k, v = line.split(":", 1)
         k, v = k.strip(), v.strip()
+        if v == "":  # block list: "key:" followed by "  - item" lines
+            items = []
+            while i < len(lines) and lines[i].strip().startswith("-"):
+                items.append(lines[i].strip()[1:].strip().strip('"').strip("'"))
+                i += 1
+            if items:
+                fm[k] = items
+                continue
+        if v in ("|", "|-", ">", ">-"):  # block scalar: take the indented lines that follow
+            block = []
+            while i < len(lines) and (not lines[i].strip() or lines[i][:1] in (" ", "\t")):
+                block.append(lines[i].strip())
+                i += 1
+            fm[k] = ("\n" if v.startswith("|") else " ").join(x for x in block if x)
+            continue
         if v.startswith("[") and v.endswith("]"):
             try:
                 fm[k] = json.loads(v)
@@ -139,17 +158,21 @@ def grade(g, parsed, cwd, llm_ok, model):
         return ok, f"{n} matching call(s) (min={lo}, max={hi})"
     if t == "regex":
         flags = re.I if "i" in (g.get("flags") or "") else 0
-        scope = g.get("scope")
-        hay = parsed["final"] if not scope else (parsed["all_text"] if scope == "all" else parsed["all_text"] + "\n" + "\n".join(parsed["results"]))
+        scope = g.get("scope") or "final"
+        hay = parsed["final"] if scope == "final" else (parsed["all_text"] if scope == "all" else parsed["all_text"] + "\n" + "\n".join(parsed["results"]))
         found = re.search(g["pattern"], hay, flags | re.S) is not None
         want = g.get("match", "contains") == "contains"
         return found == want, f"pattern {'found' if found else 'not found'} in {'transcript' if g.get('scope') == 'all' else 'final message'} (want {'present' if want else 'absent'})"
     if t == "file_exists":
         hits = glob.glob(os.path.join(cwd, g["path"]), recursive=True)
-        return bool(hits), f"{len(hits)} file(s) match {g['path']}"
+        return len(hits) >= max(1, int(g.get("min_files", 1))), f"{len(hits)} file(s) match {g['path']}"
     if t == "file_contains":
         hits = glob.glob(os.path.join(cwd, g["path"]), recursive=True)
+        need = int(g.get("min_files", 0))
+        if len(hits) < need:
+            return False, f"{len(hits)} file(s) match {g['path']}, min_files={need}: nothing was checked"
         if not hits:
+            # A not_contains over an empty set proves nothing; set min_files to require the files.
             return g.get("match", "contains") != "contains", f"no file matches {g['path']}"
         text = "\n".join(open(h, errors="replace").read() for h in hits)
         found = re.search(g["pattern"], text, re.S) is not None
@@ -173,18 +196,33 @@ def grade(g, parsed, cwd, llm_ok, model):
             if res is not None:
                 entry["result"] = res
             calls.append(entry)
-        transcript = json.dumps({"tool_calls_with_results": calls[-60:],
-                                 "assistant_text": parsed["all_text"][-12000:]}, indent=1)[-60000:]
-        judge_prompt = ("You are grading an AI coding agent's transcript against strict criteria. Answer with exactly one line: "
+        payload = {"tool_calls_with_results": calls[-60:], "assistant_text": parsed["all_text"][-12000:]}
+        # `files:` lets a judge grade the artifacts on disk instead of guessing from the transcript;
+        # agents often write through Bash heredocs or subagents, which the parent stream does not show.
+        if g.get("files"):
+            produced, budget = {}, 120000
+            for pat in (g["files"] if isinstance(g["files"], list) else [g["files"]]):
+                for h in sorted(glob.glob(os.path.join(cwd, pat), recursive=True)):
+                    if not os.path.isfile(h) or budget <= 0:
+                        continue
+                    body = open(h, errors="replace").read()[:8000]
+                    produced[os.path.relpath(h, cwd)] = body
+                    budget -= len(body)
+            payload["files_on_disk"] = produced
+        transcript = json.dumps(payload, indent=1)[-200000:]
+        judge_prompt = ("You are grading an AI coding agent's run against strict criteria. Answer with exactly one line: "
                         "PASS or FAIL, then a colon and one sentence of reason. Do not be lenient: every clause of the criteria must hold. "
-                        "Tool results are included (truncated to 1200 chars each); treat them as the evidence of what really ran.\n\n"
-                        f"CRITERIA:\n{g['_criteria']}\n\nTRANSCRIPT (tool calls, then assistant text):\n{transcript}")
+                        "Tool results are included (truncated to 1200 chars each); treat them as the evidence of what really ran. "
+                        "When a `files_on_disk` section is present it is the authoritative record of what the run produced: the agent may "
+                        "have written those files through Bash heredocs or subagents that do not appear as Write/Edit calls, so never fail "
+                        "a run for missing Write/Edit calls when the files are there.\n\n"
+                        f"CRITERIA:\n{g['_criteria']}\n\nEVIDENCE (tool calls, assistant text, and files produced):\n{transcript}")
         r = run_claude(judge_prompt, cwd=ROOT, plugin_dir=None, max_turns=1, timeout=180, model=model or "sonnet",
                        with_user_settings=False, env_extra={})
         verdict = parse_stream(r["stdout"])["final"].strip()
         ok = verdict.upper().startswith("PASS")
         return ok, verdict[:300] or f"no verdict (rc={r['rc']})"
-    return None, f"unknown grader type {t}"
+    return False, f"unknown grader type {t!r} (implemented: tool_used, regex, file_exists, file_contains, tool_order, llm)"
 
 
 def main():
@@ -239,6 +277,12 @@ def main():
                     shutil.copytree(os.path.join(FIXTURES, fixture), cwd)
                 else:
                     os.makedirs(cwd)
+                setup = c["fm"].get("setup_script")
+                if setup:
+                    sr = subprocess.run(["bash", "-c", setup], cwd=cwd, capture_output=True, text=True,
+                                        env={**os.environ, "DRUPAL_SP_ROOT": ROOT})
+                    if sr.returncode != 0:
+                        print(f"[WARN] {label}: setup_script exited {sr.returncode}: {sr.stderr[-300:]}", flush=True)
             r = run_claude(c["prompt"], cwd, None if a.baseline else a.plugin_dir, int(c["fm"].get("max_turns", 10)),
                            int(c["fm"].get("timeout_seconds", 300)), a.model, a.with_user_settings,
                            {"DRUPAL_SP_FIXTURES": FIXTURES})
@@ -257,11 +301,18 @@ def main():
                         premature.append(call["name"])
             gres = []
             run_ok = True
+            scored = 0
             for g in c["graders"]:
                 ok, why = grade(g, parsed, cwd, not a.no_llm, a.model)
                 gres.append({"grader": g["_name"], "type": g.get("type"), "ok": ok, "why": why})
                 if ok is False:
                     run_ok = False
+                elif ok is True:
+                    scored += 1
+            if scored == 0:
+                run_ok = False
+                gres.append({"grader": "_no-grader-scored", "type": "meta", "ok": False,
+                             "why": "every grader was skipped (e.g. --no-llm with only llm graders): the run proves nothing"})
             if r["timed_out"]:
                 run_ok = False
             any_fail |= not run_ok
@@ -282,6 +333,10 @@ def main():
         results.append(case_res)
     if a.dry_run:
         return 0
+    ran = sum(len(cr["runs"]) for cr in results)
+    if ran == 0:
+        print("no case actually ran (every selected case was skipped)")
+        return 1
     summary = {"timestamp": stamp, "baseline": a.baseline, "with_user_settings": a.with_user_settings, "model": a.model, "results": results}
     with open(os.path.join(outdir, "results.json"), "w") as f:
         json.dump(summary, f, indent=1)

@@ -17,7 +17,7 @@ Before building anything non-trivial that Drupal core does not provide; when the
 2. **Candidates**: search drupal.org (`https://www.drupal.org/project/project_module?text=<need>&drupal_core=<major>`), the project's existing contrib list (profile `modules.contrib`), and, if reachable, Drupal Code Query / drupal.org API:
 
    ```bash
-   "${CLAUDE_SKILL_DIR}/scripts/contrib-info" <machine_name> [<drupal major>]
+   "${CLAUDE_PLUGIN_ROOT}/skills/drupal-contrib-research/scripts/contrib-info" <machine_name> [<drupal major>]
    ```
    which prints releases per core branch, maintenance/development status, security coverage, usage, and open critical issues from drupal.org's REST API (or `unavailable` offline).
 3. **Evaluate each candidate** with [references/evaluation-criteria.md](references/evaluation-criteria.md): supported Drupal versions (`core_version_requirement` of the latest release, not the project page banner), release status (stable vs alpha/beta/dev), maintenance status, security advisory coverage, usage trend, open critical/major issues, compatibility issues for the target version, Composer constraints and dependencies, maintainer activity, superseded/obsolete notices, what it will not do.
