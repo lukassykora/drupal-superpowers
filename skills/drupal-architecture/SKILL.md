@@ -1,11 +1,13 @@
 ---
 name: drupal-architecture
 description: Use when deciding how a feature should be built on Drupal: service vs plugin, hook vs event subscriber, config entity vs content entity, state vs config, queue vs synchronous, core vs contrib vs custom, new module vs existing; during design discussions, before an implementation plan exists.
+model: fable
+effort: xhigh
 ---
 
 # Drupal architecture
 
-**Core principle:** the smallest design that uses the Drupal mechanism built for the job. Core or contrib before custom; the existing pattern in this project before a new one; no abstraction for a need nobody has yet.
+**Core principle:** the smallest design that uses the Drupal mechanism built for the job. Invoking this skill switches the current turn to the strongest model tier (`fable`, `xhigh`): use it for architectural-class work and design discussions, not for picking a mechanism inside an existing pattern (read [references/decision-tables.md](references/decision-tables.md) directly for that). Core or contrib before custom; the existing pattern in this project before a new one; no abstraction for a need nobody has yet.
 
 ## When to use
 
@@ -13,7 +15,7 @@ description: Use when deciding how a feature should be built on Drupal: service 
 - Choosing between two Drupal mechanisms (the tables below).
 - Reviewing someone else's design for Drupal fit.
 
-Not for: three-line bugfixes, label changes, or work inside an existing pattern (just follow the pattern).
+Not for: three-line bugfixes, label changes, bounded changes inside an existing pattern (follow the pattern; consult the decision tables without invoking this skill), or a single mechanism question with an obvious answer.
 
 ## Procedure
 

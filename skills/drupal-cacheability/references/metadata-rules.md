@@ -33,7 +33,7 @@ Metadata **bubbles up**: child metadata merges into parents during rendering (`B
 
 ## Max-age
 - `Cache::PERMANENT` (-1) by default. A positive max-age for time-bound output (external API results). `0` for uncacheable output and only on the smallest element, ideally behind a lazy builder.
-- Internal Page Cache (anonymous) does not respect max-age below permanent unless `page_cache_max_age` / Cache-Control handling is configured; a tag-based invalidation is required for anonymous correctness.
+- Internal Page Cache stores anonymous pages permanently and ignores render max-age (https://www.drupal.org/node/2352009); `system.performance` `cache.page.max_age` only sets the outgoing `Cache-Control` header for browsers/proxies. Tags are the only correct invalidation for anonymous pages.
 
 ## Lazy builders and BigPipe
 ```php
@@ -47,5 +47,5 @@ $build['greeting'] = [
 
 ## Testing
 - Kernel: build the block/controller output and assert `CacheableMetadata::createFromRenderArray($build)->getCacheContexts()` contains `user`; for blocks assert `$plugin->getCacheContexts()`.
-- Functional: `$this->assertCacheContext('user')`, `$this->assertCacheTag('node:1')` (AssertPageCacheContextsAndTagsTrait); `drupalGet` twice and inspect `X-Drupal-Dynamic-Cache`.
+- Functional: `$this->assertCacheContext('user')`, `$this->assertCacheTags(['node:1'])` (`Drupal\Tests\system\Functional\Cache\AssertPageCacheContextsAndTagsTrait`; `assertCacheTags` includes default tags unless the second argument is FALSE); `drupalGet` twice and inspect `X-Drupal-Dynamic-Cache`.
 - L3: two users, same URL, compare the personalized fragment; headers `X-Drupal-Cache`, `X-Drupal-Dynamic-Cache`, `Cache-Control`.

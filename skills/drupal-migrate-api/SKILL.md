@@ -33,6 +33,7 @@ Any migration YAML or plugin, `drush migrate:*`, D7/CSV/JSON/DB imports, stuck o
 - Idempotency: stable `ids`, `track_changes` for re-runs, no `uuid` collisions; never `migrate:import --update` on production without a backup and a rollback plan.
 - Performance: `--limit`, `high_water_property`, avoid loading full entities in custom source plugins; large runs via cron/queue (`migrate_cron`/`migrate_scheduler` if present).
 - Legacy business rules found during source analysis are documented in the map, not silently dropped (`drupal-legacy-archaeologist` for big D7 code bases).
+- Migration ids, field machine names, process plugin ids, and comments are English even when the source data is not; source language stays in the data.
 
 ## Works with process skills
 

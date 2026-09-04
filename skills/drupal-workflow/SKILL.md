@@ -16,7 +16,7 @@ Write one line: `Class: trivial | bounded | architectural — signal: <what in t
 | Class | Observable signals | Phases |
 |---|---|---|
 | **trivial** | one file; no PHP logic change; no config schema, permission, route, or service touched | Orient (cached profile) → Implement → static check → `drupal-verification` (two-line report) |
-| **bounded** | one module; existing patterns; ≤ ~3 files; no new entity type, integration, or auth model | Orient → Understand → Research (only unfamiliar API) → Test plan → Implement → L1 + L2 → `drupal-verification` |
+| **bounded** | one module; existing patterns; ≤ ~3 files; no new entity type, integration, or auth model | Orient → Understand → Research (only unfamiliar API) → decision tables read directly (no `drupal-architecture`) → Test plan → Implement → L1 + L2 → `drupal-verification` |
 | **architectural** | new entity/config type, external integration, permission model, migration, upgrade, cross-module behaviour, or the user says design/architecture | full pipeline below, independent review, L3 when a runtime exists |
 
 ## Step 2: phases (architectural; subsets for smaller classes)
@@ -26,7 +26,7 @@ This skill orchestrates; the domain knowledge lives in the skills named below. *
 1. **Orient** — invoke `drupal-project-understanding`: version + class, runtime + environment class, paths, commands.
 2. **Understand** — read the code on the execution path (route → controller/form → services → entities → templates) before editing anything. Name the files you read.
 3. **Research** — invoke `drupal-research` for any API you cannot point to in the installed core (including APIs the user named). For every new feature, endpoint, or module (bounded or architectural), invoke `drupal-contrib-research` first and write one line per candidate: core module, contrib module, or custom, with the reason; only then design custom code.
-4. **Design** — invoke `drupal-architecture` for mechanism choices; write 2–3 options with trade-offs for architectural work; pick the smallest Drupal-native one. Then, when the change touches access, permissions, routes, user data, output, queries, uploads, or redirects, invoke `drupal-security`; when it renders anything that varies by user, permissions, language, or query, invoke `drupal-cacheability`; when it adds or changes config, invoke `drupal-config`.
+4. **Design** — architectural class: invoke `drupal-architecture` (this escalates the turn to the strongest model); write 2–3 options with trade-offs; pick the smallest Drupal-native one. Bounded class: do not invoke it; read `drupal-architecture/references/decision-tables.md` and follow the module's existing pattern. Then, when the change touches access, permissions, routes, user data, output, queries, uploads, or redirects, invoke `drupal-security`; when it renders anything that varies by user, permissions, language, or query, invoke `drupal-cacheability`; when it adds or changes config, invoke `drupal-config`.
 5. **Test plan** — invoke `drupal-testing`: cheapest layer that proves the behaviour; for bugs, the regression test comes first and must fail.
 6. **Implement** — invoke `drupal-module-development` for module files; the smallest correct change; project conventions over preferences; no unrelated refactoring.
 7. **Verify** — invoke `drupal-runtime-verification` before running any command: L1 static, L2 automated, L3 live, each recorded as a `VERIFY` line.
@@ -45,3 +45,4 @@ When writing a plan (yours or `superpowers:writing-plans`), paste [references/gl
 | "I'll fix it and then add a test" | For bugs, test first (RED) or the test proves nothing. |
 | "This needs a service, a plugin manager, and an event" | Bounded work uses the existing pattern in the module. |
 | "Let me also clean up this old code" | Out of scope; report it separately. |
+| "The user writes Czech, so I'll name the module in Czech" | Code, machine names, comments, and reports are English; only the conversation follows the user's language. |

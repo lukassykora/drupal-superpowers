@@ -5,13 +5,13 @@ Run through the adapter (`ddev exec`, `lando ssh -c`, `docker compose exec <svc>
 ## Quick numbers
 ```bash
 # Response time and cache state
-curl -s -o /dev/null -w 'HTTP %{http_code} total %{time_total}s\n' -H 'X-Drupal-Cache: debug' <site_url>/partners
-curl -sI <site_url>/partners | grep -iE 'x-drupal-(dynamic-)?cache|cache-control'
+curl -s -o /dev/null -w 'HTTP %{http_code} total %{time_total}s\n' <site_url>/partners
+curl -sI <site_url>/partners | grep -iE 'x-drupal-(dynamic-)?cache|cache-control'   # tags/contexts headers need http.response.debug_cacheability_headers: true in services.yml
 # Query count + time for a route (LOCAL; read-only)
 drush php:eval '
   \Drupal\Core\Database\Database::startLog("perf");
   $t = microtime(TRUE); $m = memory_get_usage();
-  $r = \Drupal::httpKernel()->handle(\Symfony\Component\HttpFoundation\Request::create("/partners"));
+  $r = \Drupal::service('http_kernel')->handle(\Symfony\Component\HttpFoundation\Request::create("/partners"));
   printf("status %d, %.3fs, %.1f MB, %d queries\n", $r->getStatusCode(), microtime(TRUE)-$t, (memory_get_peak_usage()-$m)/1048576, count(\Drupal\Core\Database\Database::getLog("perf")));
 '
 # Slowest queries from the log

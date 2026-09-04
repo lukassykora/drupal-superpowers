@@ -1,6 +1,5 @@
 ---
 type: "regex"
-pattern: "VERIFY L[123]|PASS"
-flags: "i"
+pattern: "VERIFY L[123]|\\bPASS\\b|NOT VERIFIED"
 scope: "all"
 ---

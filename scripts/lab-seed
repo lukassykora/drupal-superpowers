@@ -10,7 +10,7 @@ DOCROOT=web; [ -d "$LAB/docroot" ] && DOCROOT=docroot
 mods=${*:-"saved_items contact_note xss_notes greeting_block broken_service"}
 mkdir -p "$LAB/$DOCROOT/modules/custom"
 for m in $mods; do
-  src="$ROOT/fixtures/site-current/$DOCROOT/modules/custom/$m"
+  src="$ROOT/fixtures/site-current/web/modules/custom/$m"   # fixtures always use web/; $DOCROOT is for the destination
   [ -d "$src" ] || src="$ROOT/fixtures/site-previous/web/modules/custom/$m"
   [ -d "$src" ] || { echo "no fixture module $m"; continue; }
   rm -rf "$LAB/$DOCROOT/modules/custom/$m"

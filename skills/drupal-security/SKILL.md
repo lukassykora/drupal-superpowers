@@ -3,6 +3,8 @@ name: drupal-security
 description: Use when Drupal code handles access or permissions, routes, entity or user data, query parameters, output or Markup, Twig, file uploads, database queries, redirects, AJAX callbacks, or trusted callbacks, and when asked for a security audit or review of Drupal code.
 user-invocable: true
 argument-hint: "[module or path]"
+model: opus
+effort: high
 ---
 
 # Drupal security
@@ -11,7 +13,7 @@ argument-hint: "[module or path]"
 
 ## When to use
 
-Writing or changing code in the categories above; explicit audits (`/drupal-superpowers:audit`); reviewing a change that touches them. For independent review of someone else's implementation, dispatch the read-only `drupal-security-reviewer` agent with this skill's checklist.
+Writing or changing code in the categories above; explicit audits (`/drupal-superpowers:drupal-security`); reviewing a change that touches them. For independent review of someone else's implementation, dispatch the read-only `drupal-security-reviewer` agent with this skill's checklist.
 
 ## Procedure
 
@@ -20,7 +22,7 @@ Writing or changing code in the categories above; explicit audits (`/drupal-supe
 3. **Output escaping** ([references/output-escaping.md](references/output-escaping.md)): `Markup::create()`, `#markup` with concatenated variables, `|raw`, `Xss::filterAdmin` on user input, `FormattableMarkup` with `!`/unsafe placeholders, `#allowed_tags` misuse. Twig autoescape is the default; anything that bypasses it needs a stated reason.
 4. **Run the checklist** in [references/checklist.md](references/checklist.md): authentication, authorization/permissions, CSRF, XSS, SQL, SSRF, path traversal, file uploads/private files, command execution, deserialization, open redirects, information disclosure, secrets/logging, API/AJAX access, cache leaks, trusted callbacks, dependency advisories (`composer audit`, `drush pm:security`).
 5. **Classify each finding**: `CONFIRMED` (exploit path shown with file:line), `PROBABLE` (pattern present, exploitability not proven), `DEFENSE-IN-DEPTH` (no exploit, but a missing layer), `FALSE POSITIVE` (looks risky, is safe, with the reason). Severity CRITICAL/HIGH/MEDIUM/LOW.
-6. **Fix Drupal-natively**: route requirements, `AccessResult` with cacheability, `t()`/placeholders/`#plain_text`, `Html::escape`, database placeholders/query builder, `UrlHelper::isExternal`/`TrustedRedirectResponse` only for trusted hosts, `file_validate_*`/`#upload_validators`, private scheme, `TrustedCallbackInterface`. Then add the test that proves the fix (403 for the wrong user; escaped output).
+6. **Fix Drupal-natively**: route requirements, `AccessResult` with cacheability, `t()`/placeholders/`#plain_text`, `Html::escape`, database placeholders/query builder, `UrlHelper::isExternal`/`TrustedRedirectResponse` only for trusted hosts, `#upload_validators` with validator plugin IDs (`FileExtension`, `FileSizeLimit`) / the `file.validator` service (10.2+; the procedural `file_validate_*()` functions were removed in 11.0), private scheme, `TrustedCallbackInterface`. Then add the test that proves the fix (403 for the wrong user; escaped output).
 7. Report findings first, sorted by severity, then fixes and evidence.
 
 ## Decision rules

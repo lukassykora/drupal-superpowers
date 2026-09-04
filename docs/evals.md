@@ -1,6 +1,6 @@
 # Evals
 
-Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-04: **53 cases, 101 graders**, 8 fixtures.
+Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-04 (after Phase 2): **70 cases** (trigger 19, no-trigger 19, scenarios 18, agents 2, acceptance 5, integration 7), 8 fixtures + the compose lab recipe.
 
 ## 1. Why evals come first
 
@@ -10,9 +10,9 @@ Skill descriptions are trigger surfaces; skill bodies shape behaviour. Neither c
 
 ```
 evals/
-├── trigger/<skill>/              16 cases: the prompt MUST activate <skill>
-├── no-trigger/<skill>/           16 cases: the prompt MUST NOT activate <skill>
-├── scenarios/<name>/             14 cases from spec §66
+├── trigger/<skill>/              19 cases: the prompt MUST activate <skill>
+├── no-trigger/<skill>/           19 cases: the prompt MUST NOT activate <skill>
+├── scenarios/<name>/             18 cases: 14 from spec §66 + frontend, performance, migrate, english-code
 ├── agents/<name>/                 2 cases from spec §68
 ├── acceptance/<nn>-<name>/        5 cases from spec §84–88 (03 and 05 tagged p2)
 ├── integration/                   in-place cases against a real project named by env DSP_LAB_D11 (Stage 8)
@@ -57,8 +57,9 @@ The `fixture:` key is ours. Integration cases use `project_env: DSP_LAB_D11` (ru
 ## 4. Runner (`scripts/run-evals`, Stage 5)
 
 ```
-scripts/run-evals [--group trigger|no-trigger|scenarios|agents|acceptance] [--case <name>] [--tag <tag>]
-                  [--runs N] [--no-llm] [--baseline] [--plugin-dir .] [--json out.json]
+scripts/run-evals [--group trigger|no-trigger|scenarios|agents|acceptance|integration]... [--case NAME]... [--tag T]...
+                  [--runs N] [--no-llm] [--baseline] [--plugin-dir DIR] [--with-user-settings] [--model M]
+                  [--json OUT] [--dry-run] [--keep-temp]
 ```
 
 Per case and run:
@@ -70,7 +71,7 @@ Per case and run:
 
 Trigger cases additionally record **premature tool use**: any `Read`/`Bash`/`Edit` call before the expected `Skill` call is reported (Superpowers' technique) even when the skill eventually fires.
 
-Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR gate (32 short cases). Scenarios and acceptance run nightly or on the `evals` label with `--runs 2`.
+Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR gate (38 short cases). Scenarios and acceptance run nightly or on the `evals` label with `--runs 2`.
 
 ## 5. Grading rules
 
@@ -101,6 +102,9 @@ Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR g
 | `site-ddev` | `.ddev/config.yaml` present | `scenarios/runtime-ddev` |
 | `site-prodlike` | non-local DB host, production trusted hosts | `scenarios/dangerous-env` |
 | `site-mcp` + `mcp-stub` | `.mcp.json` → stdio stub with MCP Tools-shaped read tools; `clear_all_caches` rejected (read scope) | `scenarios/mcp-present`, `acceptance/05` |
+| `site-current/partner_directory` | `load()` per node and per term inside the loop, a `COUNT(*)` per row, `max-age 0` on a public listing | `scenarios/performance`, `trigger/drupal-performance` |
+| `site-current/partner_migrate` + `data/partners.csv` | tags not trimmed/mapped to term IDs, empty tier, website without scheme, `migration_group` without migrate_plus | `scenarios/migrate`, `trigger/drupal-migrate-api` |
+| `site-current` theme `acme` | `\|raw` on rendered body, inline `onclick`, behaviour without `once()`, image without alt, static service call in preprocess, SDC component without required props | `scenarios/frontend`, `trigger/drupal-frontend` |
 | `non-drupal` | none | all `no-trigger` cases that must be silent outside Drupal |
 
 The three deprecated functions in `legacy_tools` were chosen because their removal in 11.0 is documented in core change records; the upgrade grader requires the agent to name the replacements (`ByteSizeMarkup`, `Error::logException`, `TimeZoneFormHelper`) or verified equivalents.
@@ -157,6 +161,18 @@ Lesson for the runner: real TDD work with several PHPUnit runs needs 40–60 tur
 | scenarios/migrate | **PASS** (289 s) | read `data/partners.csv` (even simulated the pipeline over the real rows), trimmed tags mapped through `entity_lookup`, `skip_on_empty` for the empty tier, website scheme normalized, migrate_plus dependency handled, import NOT VERIFIED (no runtime) |
 | scenarios/performance | **PASS** on re-run (264 s) | per-row node `load()`, per-row term `load()` and per-row `COUNT(*)` replaced by `loadMultiple()` and one hoisted count; `max-age 0` replaced by real cache metadata; measurement stated as NOT VERIFIED (no runtime). First attempt failed in 1.9 s because the prompt began with `/partners`, which Claude Code parsed as a slash command; prompts must not start with a slash (note added to the case) |
 
+### Adversarial audit of the plugin itself (2026-09-04, ultracode workflow)
+
+Nine finder agents audited the plugin against the real 11.4.6 and 10.6.16 cores (facts registry, all skill references, scripts, hooks, docs consistency, eval graders, skill bodies) and returned **141 findings** (2 CRITICAL, 26 HIGH, 64 MEDIUM, 49 LOW). The adversarial verification stage (283 refuter agents and the completeness critic) could not run: the account hit its monthly spend limit mid-workflow. The maintainer therefore verified every CRITICAL/HIGH finding by hand against the real cores (twelve spot checks, all confirmed) and applied the fixes for all severities in one pass:
+
+- **Facts and references**: `drush updb -n` is not a dry run (it auto-confirms) → `updatedb:status`; `file_validate_*()` removed in 11.0 → `#upload_validators`/`file.validator`; `#[RunTestsInSeparateProcesses]` settled (required on Kernel/Functional/FJS from 11.3, CR 3548485); entity-type attributes only from 11.1; `EditorialContentEntityBase` needs `revision_metadata_keys`; duplicate YAML key in the services example; wrong core paths (`node_cron`, Functional `NodeAccessTest`, `PrivateTempStoreFactory`, `AssertPageCacheContextsAndTagsTrait`); non-existent commands/options (`drush router`, `twig:lint`, `role:perm:list`, `cim --preview`, `pm:security-php`, `\Drupal::httpKernel()`, `migrate:status --group`, `dedupe_entity`, `#[MigrateSource]` on 10.x); PHPUnit 9 pinned on all 10.x; `page_cache_max_age` does not exist; matrix EOL dates; the three removed-function facts now apply on 11.x.
+- **Scripts**: `dsp_find_root` prints kind first (paths with spaces), keeps walking above a docroot (cwd inside `web/` no longer reports `core`), settings.php comments no longer classify every site as UNKNOWN or `mysql`, config sync resolved against the docroot, dev-branch versions (`11.x-dev`, `dev-main`) class `dev` and pass `since` gates, compose service detection at any indentation, quoted YAML names, scripts exit 0, GNU/BSD `stat`.
+- **Guard**: Drush aliases/global options and `$DRUSH` normalised; `sin`/`un`/`user-password`; chained commands; piped `sql:cli` and `--file`; `+refspec` force push; `composer up|u|upgrade` and the `--dry-run`/named-package exemption fixed; `rm -rf ./web|web/|sites|config`, `find -delete`; `mysql < file`; quotes stripped; read-only text tools (`grep`, `cat`, `echo`) exempt; git/rm rules apply outside Drupal roots. Stop hook counts only Edit/Write/MultiEdit and real Bash writes, and reads report markers from text blocks only.
+- **Evals/runner**: anchored regexes, `\bPASS\b`, `RED` case-sensitive, `file_contains` instead of wording checks, drush command aliases, tool results paired by `tool_use_id`, `DRUPAL_SP_ROOT` exported to reset scripts, premature-tool detection keyed on the expected skill, legacy scenario graded on files.
+- **Docs**: real slash names (`/drupal-superpowers:drupal-security`, …), counts, `facts.json`, hook table, Stop-hook wording, description budget 400, PR gate 38 cases.
+
+Follow-up: re-run the adversarial verification and the affected evals when the spend limit resets; the `english-code` scenario passed all deterministic graders on its first run (no Czech in PHP/YAML, English machine names) and only its LLM judge was blocked by the limit.
+
 ## 9. CI mapping
 
 | Job | Command | When |
@@ -165,6 +181,6 @@ Lesson for the runner: real TDD work with several PHPUnit runs needs 40–60 tur
 | script-tests | bash asserts for `drupal-profile`, `drupal-runtime`, `guard-bash` against fixtures | every push |
 | evals-trigger | `scripts/run-evals --group trigger --group no-trigger --no-llm --runs 1` | every PR |
 | evals-full | `scripts/run-evals --group scenarios --group agents --group acceptance --runs 2` | nightly, label `evals` |
-| evals-integration | Docker Compose Drupal from `fixtures/lab-compose/`, `evals/integration/` | nightly, label `integration` |
+| evals-integration | `evals/integration/` in place against labs named by `DSP_LAB_D11` / `DSP_LAB_D10` (built with `fixtures/lab-compose/` or natively) — not yet wired into `ci.yml` | manual / on request |
 
-Cases tagged `p2` are excluded from pass/fail gating until Phase 2 but still run nightly for information.
+The `p2` tag on acceptance 03/05 is informational only (Phase 2 is done); the runner gates every selected case.

@@ -1,6 +1,6 @@
 # Migrate plugins (core + common contrib)
 
-Verify availability in the installed code: core plugins live under `core/modules/migrate/src/Plugin/migrate/{source,process,destination}` and `core/modules/migrate_drupal`; contrib under `modules/contrib/migrate_plus/src/Plugin/migrate/`. Attributes `#[MigrateSource]`, `#[MigrateProcess]`, `#[MigrateDestination]` on 10.3+ (annotations earlier).
+Verify availability in the installed code: core plugins live under `core/modules/migrate/src/Plugin/migrate/{source,process,destination}` and `core/modules/migrate_drupal`; contrib under `modules/contrib/migrate_plus/src/Plugin/migrate/`. Attributes `#[MigrateProcess]` and `#[MigrateDestination]` on 10.3+; `#[MigrateSource]` only on 11.x (10.x source plugins use the `@MigrateSource` annotation); verify in the installed core.
 
 ## Source
 | Plugin | From | Use |
@@ -8,7 +8,7 @@ Verify availability in the installed code: core plugins live under `core/modules
 | `embedded_data` | core | tests, tiny fixed datasets (`data_rows`, `ids`) |
 | `csv` | migrate_source_csv | `path`, `ids`, `header_row_count`, `delimiter`, `enclosure`, `fields` (when no header) |
 | `url` | migrate_plus | JSON/XML/SOAP over HTTP or files: `data_fetcher_plugin: file|http`, `data_parser_plugin: json|xml|simple_xml`, `item_selector`, `fields`, `ids` |
-| `d7_node`, `d7_user`, `d7_taxonomy_term`, `d7_file`, `d7_field_values`… | migrate_drupal | D7 database via the `migrate` DB key (`$databases['migrate']['default']` in settings) |
+| `d7_node`, `d7_user`, `d7_taxonomy_term`, `d7_file`, `d7_field`, `d7_field_instance`… | migrate_drupal | D7 database via the `migrate` DB key (`$databases['migrate']['default']` in settings) |
 | `table` | migrate_plus | any table on any DB key |
 | custom `SqlBase` / `SourcePluginBase` | your module | when nothing fits; implement `query()`/`initializeIterator()`, `fields()`, `getIds()`, `prepareRow()` |
 
@@ -27,7 +27,7 @@ Verify availability in the installed code: core plugins live under `core/modules
 | `entity_lookup` (migrate_plus) | find by `value_key`/`bundle`; `entity_generate` creates when missing (document it) |
 | `sub_process` | iterate multi-value arrays: `process: { target_id: { plugin: migration_lookup, ... } }` |
 | `file_copy` / `file_import` (migrate_file) | files → `entity:file`; media via a second migration |
-| `machine_name`, `substr`, `str_replace`, `urlencode`, `dedupe_entity`, `log`, `null_coalesce` | utilities; `log` prints values during debugging |
+| `machine_name`, `substr`, `str_replace`, `urlencode`, `make_unique_entity_field`, `log`, `null_coalesce` | utilities; `log` prints values during debugging |
 
 ## Destination
 | Plugin | Notes |

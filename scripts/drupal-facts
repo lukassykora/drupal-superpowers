@@ -15,7 +15,7 @@ FACTS="$DSP_ROOT/references/versions/facts.json"
 
 usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
-branch_of() { echo "$1" | awk -F. '{ if ($1+0 < 10) print $1; else print $1"."$2 }'; }
+branch_of() { local v=${1#dev-}; v=${v%%-*}; case "$v" in *.x) echo "${v%.x}" | awk -F. '{print $1}'; return;; esac; echo "$v" | awk -F. '{ if ($1+0 < 10) print $1; else print $1"."$2 }'; }
 
 matrix_json() { dsp_md_json_block "$MATRIX" support; }
 
@@ -25,7 +25,7 @@ cmd_class() {
   local tmp; tmp=$(mktemp); matrix_json > "$tmp"
   local n i=0 cls eol reviewed
   reviewed=$(dsp_json get "$tmp" last_reviewed)
-  n=$(dsp_json get "$tmp" branches | grep -o '"branch"' | wc -l | tr -d ' ')
+  n=$( (dsp_json get "$tmp" branches || true) | grep -o '"branch"' | wc -l | tr -d ' ')
   cls=""; eol=""
   while [ $i -lt "$n" ]; do
     if [ "$(dsp_json get "$tmp" "branches.$i.branch")" = "$br" ]; then
@@ -38,7 +38,7 @@ cmd_class() {
   if [ -z "$cls" ]; then
     cls="unknown"; note="branch $br not in matrix (last_reviewed $reviewed); check drupal.org/project/drupal/releases"
   fi
-  case "$v" in *-dev|*-alpha*|*-beta*|*-rc*|*.x) [ "$cls" = "unknown" ] || cls="dev";; esac
+  case "$v" in dev-*|*-dev|*-alpha*|*-beta*|*-rc*|*.x) cls="dev"; note="";; esac
   if stale_days "$reviewed" 120; then note="${note:+$note; }matrix last_reviewed $reviewed is older than 120 days: verify the class against drupal.org before relying on it"; fi
   if [ "${2:-}" = "--json" ]; then
     printf '{"version":%s,"branch":%s,"class":%s,"eol_date":%s,"matrix_reviewed":%s,"note":%s}\n' \
@@ -58,7 +58,7 @@ stale_days() {
   [ $(( (now - then) / 86400 )) -gt "$max" ]
 }
 
-fact_count() { dsp_json get "$FACTS" facts | grep -o '"id"' | wc -l | tr -d ' '; }
+fact_count() { (dsp_json get "$FACTS" facts || true) | grep -o '"id"' | wc -l | tr -d ' '; }
 
 fact_field() { dsp_json get "$FACTS" "facts.$1.$2"; }
 

@@ -10,7 +10,7 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
 | Level | Evidence | Typical commands |
 |---|---|---|
 | **L1 static** | syntax, coding standards, static analysis | `php -l`, `phpcs --standard=<project or Drupal,DrupalPractice>`, `phpstan analyse` |
-| **L2 Drupal automated** | tests and bootstrap | `phpunit -c <config> <path>`, `drush status`, `drush cr`, container compile, `drush updb --no-cache-clear -n` (dry), `drush config:status` |
+| **L2 Drupal automated** | tests and bootstrap | `phpunit -c <config> <path>`, `drush status`, `drush cr`, container compile, `drush updatedb:status` (pending updates, read-only; `drush updb` has no dry-run), `drush config:status` |
 | **L3 live** | the running site | HTTP request (`curl -i`), `drush user:login` link + browser, logs (`drush watchdog:show`), real user flows |
 
 ## Procedure
@@ -22,7 +22,7 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
    ```
 
    `adapter: none` → L1 with host tools if present, L2/L3 impossible → say `NOT VERIFIED — no runnable environment` and offer a disposable lab ([references/disposable-lab.md](references/disposable-lab.md)). Never install Docker/DDEV or start a stopped project without saying so.
-2. Check `environment.class`. Anything but LOCAL/DISPOSABLE: read-only commands only, and every state-changing command (`cr` included) is announced before it runs; destructive commands need explicit approval for that environment (the guard hook blocks them otherwise).
+2. Check `environment.class`. Anything but LOCAL/DISPOSABLE: read-only commands only; every state-changing command (`cr` included) needs the user's explicit approval for that environment before it runs; destructive commands are blocked by the guard hook regardless.
 3. Run in order L1 → L2 → L3, project wrappers first (`composer test`, `make lint`). Record each as a ledger line:
 
    ```

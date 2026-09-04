@@ -3,7 +3,7 @@
 ## Diagnose (read-only)
 ```bash
 drush config:status                 # what differs, and in which direction
-drush cim --preview=diff            # the full diff an import would apply (no -y)
+drush cim --diff --no               # the full diff an import would apply, then abort at the prompt (Drush 12+)
 drush config:get system.site        # actual active value
 drush config:status --state=Only\ in\ sync\ dir   # Drush 12/13 filters
 ```

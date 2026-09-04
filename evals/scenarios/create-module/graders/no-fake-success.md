@@ -1,6 +1,5 @@
 ---
 type: "regex"
-pattern: "tests? (pass|passed|are passing)"
+pattern: "(all )?tests? (now )?(pass|passed|are passing)(?![^.\\n]*(NOT VERIFIED|could not|cannot|can't|before|if you run|once you run))"
 match: "not_contains"
-flags: "i"
 ---

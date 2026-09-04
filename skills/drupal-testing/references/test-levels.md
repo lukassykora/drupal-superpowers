@@ -4,7 +4,7 @@
 |---|---|---|---|---|---|
 | Unit | `Drupal\Tests\UnitTestCase`, `tests/src/Unit` | nothing | ms | pure logic with injected collaborators | `core/tests/Drupal/Tests/Core/`, `modules/user/tests/src/Unit/` |
 | Kernel | `Drupal\KernelTests\KernelTestBase`, `tests/src/Kernel` | container + DB schema you install | ~1 s | services, entity CRUD/access, config, plugins, queries, hooks, cache metadata | `modules/node/tests/src/Kernel/NodeAccessTest.php` |
-| Functional | `Drupal\Tests\BrowserTestBase`, `tests/src/Functional` | full site install per test | 10–60 s | routes, permissions, forms, rendered pages, redirects | `modules/node/tests/src/Functional/NodeAccessTest.php` |
+| Functional | `Drupal\Tests\BrowserTestBase`, `tests/src/Functional` | full site install per test | 10–60 s | routes, permissions, forms, rendered pages, redirects | `modules/node/tests/src/Functional/NodeAccessCacheabilityTest.php`, `NodeAccessFieldTest.php` |
 | FunctionalJavascript | `Drupal\FunctionalJavascriptTests\WebDriverTestBase`, `tests/src/FunctionalJavascript` | site + WebDriver | 30 s+ | JS, AJAX, behaviors, once() | `modules/system/tests/src/FunctionalJavascript/` |
 | Nightwatch | `tests/src/Nightwatch` | site via core's yarn setup | | core JS; rarely used in projects | `core/tests/Drupal/Nightwatch/` |
 
@@ -17,10 +17,11 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\user\Traits\UserCreationTrait;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
-/**
- * @group saved_items
- */
+#[Group('saved_items')]
+#[RunTestsInSeparateProcesses]   // 11.3+; on 10.x/PHPUnit 9 use the @group docblock instead
 final class SavedItemsRepositoryTest extends KernelTestBase {
   use UserCreationTrait;
 
@@ -54,10 +55,11 @@ Traits worth knowing: `UserCreationTrait`, `NodeCreationTrait`, `ContentTypeCrea
 namespace Drupal\Tests\saved_items\Functional;
 
 use Drupal\Tests\BrowserTestBase;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
-/**
- * @group saved_items
- */
+#[Group('saved_items')]
+#[RunTestsInSeparateProcesses]
 final class SavedItemsRouteTest extends BrowserTestBase {
   protected static $modules = ['node', 'saved_items'];
   protected $defaultTheme = 'stark';
@@ -74,13 +76,14 @@ final class SavedItemsRouteTest extends BrowserTestBase {
   }
 }
 ```
-On 11.3+ check the facts registry entry `run-tests-in-separate-processes` (unverified) for required attributes on Functional tests.
+11.3+: every Kernel, Functional and FunctionalJavascript test class must carry `#[RunTestsInSeparateProcesses]` (`use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;`); omitting it is deprecated in 11.3 and throws in 12.0 (https://www.drupal.org/node/3548485, verified in `KernelTestBase`/`BrowserTestBase` of 11.4.6). With PHPUnit 11 (11.x core-dev) use attributes: `#[Group('saved_items')]` instead of `@group`.
 
 ## Cache metadata tests (Kernel)
 
 ```php
-$build = $this->container->get('plugin.manager.block')->createInstance('greeting_block')->build();
-$this->assertContains('user', $block->getCacheContexts());
+$plugin = $this->container->get('plugin.manager.block')->createInstance('greeting_block');
+$build = $plugin->build();
+$this->assertContains('user', $plugin->getCacheContexts());
 // or render and inspect BubbleableMetadata::createFromRenderArray($build)->getCacheContexts()
 ```
 

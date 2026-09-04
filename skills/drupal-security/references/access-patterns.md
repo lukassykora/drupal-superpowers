@@ -18,7 +18,7 @@ requirements:
 - Entity queries: `->accessCheck(TRUE)` (node access grants applied for nodes). `accessCheck(FALSE)` only in admin/system contexts and documented.
 - Custom entity types: implement `EntityAccessControlHandler::checkAccess()` and `checkCreateAccess()`; `hook_ENTITY_TYPE_access` for cross-module rules; owner checks via `EntityOwnerInterface`.
 - Node access grants (`hook_node_grants`/`hook_node_access_records`) when per-node visibility is needed; rebuilding grants is a deployment step.
-- Revisions and moderation: "view latest revision" and "view any unpublished content" are separate permissions; check the operation you actually perform.
+- Revisions and moderation: "view latest version" (content_moderation) and "view any unpublished content" are separate permissions; check the operation you actually perform.
 
 ## 3. Field
 - `$entity->get('field')->access('view'|'edit', $account)`; field formatters/widgets respect it, raw `->value` reads do not.

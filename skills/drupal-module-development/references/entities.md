@@ -21,6 +21,8 @@ Content entity: user data, revisions, translations, fields, Views. Config entity
   revision_table: 'saved_list_revision',
   translatable: TRUE,
   admin_permission: 'administer saved lists',
+  revision_metadata_keys: ['revision_user' => 'revision_uid', 'revision_created' => 'revision_timestamp', 'revision_log_message' => 'revision_log'],
+  revision_data_table: 'saved_list_field_revision',
   entity_keys: ['id' => 'id', 'revision' => 'vid', 'label' => 'title', 'uuid' => 'uuid', 'owner' => 'uid', 'langcode' => 'langcode', 'published' => 'status'],
   links: ['canonical' => '/saved-list/{saved_list}', 'edit-form' => '/saved-list/{saved_list}/edit', 'delete-form' => '/saved-list/{saved_list}/delete', 'collection' => '/admin/content/saved-lists'],
   field_ui_base_route: 'entity.saved_list.settings',
@@ -34,7 +36,7 @@ final class SavedList extends EditorialContentEntityBase implements EntityOwnerI
   }
 }
 ```
-- Annotation form (`@ContentEntityType`) for ≤ 10.1; verify with `drupal-facts` and the core `Node` class of the installed version.
+- Annotation form (`@ContentEntityType`) for all 10.x and 11.0: entity-type attributes exist only from 11.1 (`core/lib/Drupal/Core/Entity/Attribute/`); verify against the installed core's `Node` class. `EditorialContentEntityBase` requires `revision_metadata_keys` (its trait throws `UnsupportedEntityTypeDefinitionException` otherwise).
 - Schema is generated from field definitions; adding a base field to an existing site needs `hook_update_N` with `\Drupal::entityDefinitionUpdateManager()->installFieldStorageDefinition(...)`.
 - Bundles: `bundle_entity_type` pointing to a config entity type, or `bundle` key alone for hard-coded bundles.
 
@@ -43,7 +45,7 @@ final class SavedList extends EditorialContentEntityBase implements EntityOwnerI
 ```php
 final class SavedListAccessControlHandler extends EntityAccessControlHandler {
   protected function checkAccess(EntityInterface $entity, $operation, AccountInterface $account): AccessResult {
-    $is_owner = $entity->getOwnerId() === $account->id();
+    $is_owner = $account->id() && (int) $entity->getOwnerId() === (int) $account->id();   // getOwnerId() is a string from storage
     return match ($operation) {
       'view' => AccessResult::allowedIf($is_owner || $entity->isPublished())->addCacheableDependency($entity)->cachePerUser(),
       'update', 'delete' => AccessResult::allowedIf($is_owner)->cachePerUser()->addCacheableDependency($entity),

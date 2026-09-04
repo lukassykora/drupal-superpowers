@@ -82,7 +82,7 @@ saved_items.settings:
 
 ## `<module>.install`
 
-- `hook_schema()` for custom tables (prefer entities); `hook_install()`/`hook_uninstall()` for one-off setup; `hook_requirements($phase)` for runtime checks.
+- `hook_schema()` for custom tables (prefer entities); `hook_install()`/`hook_uninstall()` for one-off setup; `hook_requirements($phase)` for install-phase checks (on ≥ 11.2 runtime/update checks are `#[Hook('runtime_requirements')]` / `#[Hook('update_requirements')]` in `src/Hook/`; a procedural `hook_requirements` needs `#[LegacyRequirementsHook]` on 11.3+).
 - `hook_update_N()`: schema and structural changes, numbered `<major><minor><seq>` style the project uses (e.g. `11401`); idempotent; return a translatable message.
 - `<module>.post_update.php`: `hook_post_update_NAME(&$sandbox)` for data/config updates; batchable via `$sandbox`.
 

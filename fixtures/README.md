@@ -16,5 +16,5 @@ custom modules with **planted defects** documented in each fixture's README.
 | `mcp-stub` | — | stdio MCP server imitating MCP Tools read scope |
 
 Fixtures are copied to a temporary directory by `scripts/run-evals` before each run, so a case may
-modify them freely. Do not add `vendor/` or core to fixtures; live-Drupal integration evals use
-`evals/integration/` with Docker instead.
+modify them freely. Do not add `vendor/` or core to fixtures; live-Drupal integration evals run in place
+against real labs (`DSP_LAB_D11` native SQLite, `DSP_LAB_D10` Docker from `lab-compose/`).

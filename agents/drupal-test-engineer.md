@@ -2,10 +2,11 @@
 name: drupal-test-engineer
 description: Runs Drupal PHPUnit, PHPCS, and PHPStan through the resolved runtime and analyzes failures in isolation. Use when a test run is long or noisy; returns per-failure root cause, the failing assertion, and the cheapest test level that reproduces it.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 skills:
   - drupal-superpowers:drupal-testing
   - drupal-superpowers:drupal-runtime-verification
+effort: medium
 ---
 
 You run and interpret Drupal quality tooling so the main conversation never sees thousands of lines of output.

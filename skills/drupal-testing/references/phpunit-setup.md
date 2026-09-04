@@ -37,7 +37,6 @@ Add `--debug` for progress on slow Functional runs; `--stop-on-failure` when ite
 ## PHPUnit version differences
 | PHPUnit | Drupal | Style |
 |---|---|---|
-| 9 | 9.x, 10.0–10.1 | annotations (`@group`, `@covers`), `setUp(): void` |
-| 10 | 10.2+ | attributes available; annotations still work |
-| 11 | 11.x | attributes preferred (`#[Group('x')]`), data providers static |
+| 9 | 9.x and all 10.x (core-dev pins `^9.6`) | annotations only (`@group`, `@covers`); PHP attributes are ignored |
+| 11 | 11.x (11.4 core-dev: `^11.5`) | attributes (`#[Group('x')]`, `#[RunTestsInSeparateProcesses]`, static data providers); doc-comment metadata deprecated in PHPUnit 11, removed in 12 |
 Check `packages.phpunit` in the profile and copy the style of existing tests in the project.

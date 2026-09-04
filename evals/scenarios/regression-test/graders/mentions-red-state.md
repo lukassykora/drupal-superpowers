@@ -1,6 +1,6 @@
 ---
 type: "regex"
-pattern: "fail(s|ing)? first|RED|expected to fail|not verified"
+pattern: "fail(s|ing)? first|\\bRED\\b|expected to fail|NOT VERIFIED"
 match: "contains"
-flags: "i"
+scope: "all"
 ---

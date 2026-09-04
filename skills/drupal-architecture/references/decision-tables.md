@@ -1,6 +1,6 @@
 # Decision tables
 
-Each table lists the observable condition that selects a row. When two rows match, prefer the one with fewer moving parts. Core examples to read are in `references/patterns/index.md`.
+Each table lists the observable condition that selects a row. When two rows match, prefer the one with fewer moving parts. Core examples to read are in the pattern index (`skills/drupal-research/references/core-patterns-index.md`, also `references/patterns/index.md` at the plugin root).
 
 ## Service vs plugin vs event subscriber vs hook
 

@@ -35,7 +35,7 @@ Before building anything non-trivial that Drupal core does not provide; when the
 
 ## Works with process skills
 
-In `superpowers:brainstorming` this is the "existing solutions" part of approaches; in `drupal-architecture` it is the core/contrib/custom table.
+In `superpowers:brainstorming`, run this during "Explore project context" and feed it into "Propose 2-3 approaches" (core / contrib / custom); in `drupal-architecture` it is the core/contrib/custom table.
 
 ## Red flags
 

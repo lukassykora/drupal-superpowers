@@ -19,7 +19,7 @@ if dsp_have php; then
   lint=$(php -l "$file" 2>&1) || out="php -l: $(printf '%s' "$lint" | grep -v '^Errors parsing' | head -3)"
 fi
 
-read -r ROOT KIND <<<"$(dsp_find_root "$(dirname "$file")")"
+read -r KIND ROOT <<<"$(dsp_find_root "$(dirname "$file")")"
 if [ "$KIND" != "none" ] && [ -x "$ROOT/vendor/bin/phpcs" ] && [ -z "$out" ]; then
   std=""
   for c in phpcs.xml phpcs.xml.dist .phpcs.xml .phpcs.xml.dist; do [ -f "$ROOT/$c" ] && { std="--standard=$ROOT/$c"; break; }; done

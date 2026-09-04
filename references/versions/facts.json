@@ -12,7 +12,7 @@
       "until": null,
       "change_record": "https://www.drupal.org/node/3442349",
       "verify_in_core": "core/lib/Drupal/Core/Hook/Attribute/Hook.php",
-      "note": "Use #[LegacyHook] on the procedural shim for 10.x compatibility. Install/update hooks, hook_theme, hook_requirements, hook_hook_info stay procedural."
+      "note": "Use #[LegacyHook] on the procedural shim for 10.x compatibility. Stay procedural in every version: hook_install, hook_schema, hook_update_N, hook_post_update_NAME, hook_hook_info, hook_module_implements_alter. hook_theme CAN be #[Hook('theme')] on 11.1+ (core does it). hook_requirements: procedural in 11.1; from 11.2 runtime/update checks are #[Hook('runtime_requirements')] / #[Hook('update_requirements')], and a procedural hook_requirements needs #[LegacyRequirementsHook] on 11.3+ (removed in 13.0)."
     },
     {
       "id": "oop-hooks-ordering",
@@ -51,7 +51,7 @@
     },
     {
       "id": "plugin-attribute-class-required",
-      "statement": "Plugin types must provide an attribute class; annotation-only plugin types are deprecated (removal of annotation support in 13.0).",
+      "statement": "Plugin types must provide an attribute class: a plugin manager without one is deprecated in 11.2 and unsupported in 12.0; plugin implementations still using annotations are deprecated and removed in 13.0.",
       "since": "11.2.0",
       "until": null,
       "change_record": "https://www.drupal.org/node/3522776",
@@ -62,7 +62,7 @@
       "statement": "Recipes (recipe.yml with config actions) can be applied to a site.",
       "since": "10.3.0",
       "until": null,
-      "change_record": "UNVERIFIED nid — see https://www.drupal.org/docs/extending-drupal/drupal-recipes and the 10.3.x change-record list",
+      "change_record": "https://www.drupal.org/node/3445169",
       "verify_in_core": "core/lib/Drupal/Core/Recipe/Recipe.php"
     },
     {
@@ -71,32 +71,34 @@
       "since": "10.0.0",
       "until": null,
       "change_record": "https://www.drupal.org/node/3201242 (deprecation announced 9.2; exception thrown from 10.0)",
-      "verify_in_core": "core/lib/Drupal/Core/Entity/Query/QueryBase.php"
+      "verify_in_core": "core/lib/Drupal/Core/Entity/Query/Sql/Query.php (grep 'Entity queries must explicitly set')"
     },
     {
       "id": "format-size-removed",
-      "statement": "format_size() is deprecated (10.2) and removed in 11.0; use \\Drupal\\Core\\StringTranslation\\ByteSizeMarkup::create().",
+      "statement": "format_size() is deprecated in 10.2 and removed in 11.0; never call it on 11.x — use \\Drupal\\Core\\StringTranslation\\ByteSizeMarkup::create().",
       "since": "10.2.0",
-      "until": "11.0.0",
+      "until": null,
       "change_record": "https://www.drupal.org/node/2999981",
       "verify_in_core": "core/lib/Drupal/Core/StringTranslation/ByteSizeMarkup.php",
-      "note": "since/until here mark the deprecation window: in >= 11.0 the function does not exist."
+      "note": "Applies from the deprecation onward (the function is absent on 11.x); 'until' is null on purpose so 11.x agents still see it. Deprecated-in version = since."
     },
     {
       "id": "watchdog-exception-removed",
-      "statement": "watchdog_exception() is deprecated (10.1) and removed in 11.0; use \\Drupal\\Core\\Utility\\Error::logException() with an injected logger.",
+      "statement": "watchdog_exception() is deprecated in 10.1 and removed in 11.0; never call it on 11.x — use \\Drupal\\Core\\Utility\\Error::logException() with an injected logger.",
       "since": "10.1.0",
-      "until": "11.0.0",
+      "until": null,
       "change_record": "https://www.drupal.org/node/2932520",
-      "verify_in_core": "core/lib/Drupal/Core/Utility/Error.php"
+      "verify_in_core": "core/lib/Drupal/Core/Utility/Error.php",
+      "note": "Applies from the deprecation onward (the function is absent on 11.x); 'until' is null on purpose so 11.x agents still see it. Deprecated-in version = since."
     },
     {
       "id": "system-time-zones-removed",
-      "statement": "system_time_zones() is deprecated (10.1) and removed in 11.0; use \\Drupal\\Core\\Datetime\\TimeZoneFormHelper.",
+      "statement": "system_time_zones() is deprecated in 10.1 and removed in 11.0; never call it on 11.x — use \\Drupal\\Core\\Datetime\\TimeZoneFormHelper.",
       "since": "10.1.0",
-      "until": "11.0.0",
+      "until": null,
       "change_record": "https://www.drupal.org/node/3023528",
-      "verify_in_core": "core/lib/Drupal/Core/Datetime/TimeZoneFormHelper.php"
+      "verify_in_core": "core/lib/Drupal/Core/Datetime/TimeZoneFormHelper.php",
+      "note": "Applies from the deprecation onward (the function is absent on 11.x); 'until' is null on purpose so 11.x agents still see it. Deprecated-in version = since."
     },
     {
       "id": "drupal-12-php",
@@ -108,12 +110,12 @@
     },
     {
       "id": "run-tests-in-separate-processes",
-      "statement": "Functional tests need #[RunTestsInSeparateProcesses] (or equivalent) from 11.3.",
+      "statement": "Kernel, Functional and FunctionalJavascript test classes must carry #[RunTestsInSeparateProcesses]; omitting it is deprecated in 11.3.0 and throws an exception in 12.0.0.",
       "since": "11.3.0",
       "until": null,
-      "change_record": "UNVERIFIED — reported by ai_best_practices and secondary sources; confirm the change record before relying on it",
-      "verify_in_core": "core/tests/Drupal/Tests/BrowserTestBase.php",
-      "note": "Marked unverified on 2026-09-04."
+      "change_record": "https://www.drupal.org/node/3548485",
+      "verify_in_core": "core/tests/Drupal/KernelTests/KernelTestBase.php (grep RunTestsInSeparateProcesses) and core/tests/Drupal/Tests/BrowserTestBase.php",
+      "note": "Verified against 11.4.6 core on 2026-09-04: the trigger_error text in both base classes."
     }
   ]
 }

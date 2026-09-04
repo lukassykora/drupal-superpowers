@@ -21,11 +21,11 @@ Twig templates and preprocess, theme libraries and assets, JS behaviours, SDC co
 
 1. **Orient in the theme**: base theme, regions, `*.libraries.yml`, existing components (`components/`), build tooling (profile `frontend.*`: package manager, Vite/Webpack), CSS conventions (BEM, utility classes), existing `templates/` naming. Follow what exists.
 2. **Templates** ([references/twig.md](references/twig.md)): autoescape stays on; render fields with `{{ content.field }}` or `{{ content|without(...) }}`, never `|raw` on field or user data; attributes through `{{ attributes }}`/`addClass()`; `{% trans %}` or `{{ 'text'|t }}` for UI strings; suggestions via `hook_theme_suggestions_HOOK_alter` or `hook_preprocess_HOOK`, not copied templates for every bundle.
-3. **Preprocess** (`*.theme`): compute variables, inject nothing static (`\Drupal::service()` is tolerated in `.theme` files but prefer render arrays built by the module, and add cacheability for anything fetched: `$variables['#cache']['contexts'|'tags']`).
+3. **Preprocess** (`*.theme`): compute variables; `\Drupal::` is acceptable there as in any procedural hook, but prefer render arrays built by the module, and add cacheability for anything fetched: `$variables['#cache']['contexts'|'tags']`.
 4. **Assets** ([references/libraries-behaviors.md](references/libraries-behaviors.md)): every JS/CSS goes through `*.libraries.yml` and is attached (`#attached`, `{{ attach_library() }}`, `libraries:` in info.yml for global); JS is a `Drupal.behaviors.<name>.attach(context, settings)` using `once('name', selector, context)`; data to JS via `drupalSettings`, never inline `<script>` or `onclick`.
 5. **SDC** ([references/sdc.md](references/sdc.md)) when the project uses components: `*.component.yml` schema with required props, `{{ include('theme:component', {...}) }}` or `{% embed %}`, slots for markup, no business logic in components.
 6. **Accessibility** ([references/accessibility.md](references/accessibility.md)) for any UI change: semantic elements, one `h1`, labels for controls, `alt` on images (empty for decorative), keyboard operability for anything clickable (button/link, not div+onclick), focus visible, ARIA only where native semantics fall short, contrast ≥ 4.5:1 for text.
-7. **Verify**: `drush cr` for Twig/theme-registry changes; Twig lint (`drush twig:lint` or project lint); build step if any; browser check when a runtime exists (`drupal-runtime-verification` browser reference): console errors, behaviour re-attach after AJAX (no double binding), keyboard walk, accessibility tree; cache headers unchanged for anonymous.
+7. **Verify**: `drush cr` for Twig/theme-registry changes; Twig compile/lint (`drush twig:compile` or the project's Twig linter); build step if any; browser check when a runtime exists (`drupal-runtime-verification` browser reference): console errors, behaviour re-attach after AJAX (no double binding), keyboard walk, accessibility tree; cache headers unchanged for anonymous.
 
 ## Decision rules
 
@@ -34,6 +34,7 @@ Twig templates and preprocess, theme libraries and assets, JS behaviours, SDC co
 - One template per real variation; suggestions and preprocess handle the rest.
 - New CSS/JS → the project's build pipeline and library; no CDN links without an explicit decision (privacy, SRI).
 - Component vs template: SDC when the project has `components/` or SDC in core (10.1+, stable in 10.3+); otherwise templates + preprocess.
+- English everywhere in code: template names, CSS classes, JS identifiers, comments; visible text in English via `|t`/`{% trans %}` so Drupal translates it.
 
 ## Works with process skills
 

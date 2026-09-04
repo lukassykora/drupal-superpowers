@@ -3,6 +3,8 @@ name: drupal-code-review
 description: Use when reviewing a Drupal diff, module, or pull request for correctness, Drupal API use, version compatibility, security, access, cacheability, configuration, tests, coding standards, and deployment impact, or when asked to review Drupal code.
 user-invocable: true
 argument-hint: "[path, module, or PR]"
+model: opus
+effort: high
 ---
 
 # Drupal code review
@@ -24,7 +26,7 @@ Reviewing any Drupal change: your own before claiming done (light pass), someone
    ```
    CRITICAL  src/Controller/NotesController.php:24  Reflected XSS: query parameter `highlight` wrapped in Markup::create(). Fix: '#plain_text' or t() placeholder.
    HIGH      xss_notes.routing.yml:7  `_access: 'TRUE'` on a route that renders node fields; unpublished nodes readable. Fix: `_entity_access: 'node.view'`.
-   MEDIUM    src/Plugin/Block/GreetingBlock.php:41  Output varies per user, no `user` cache context → cross-user leak via render cache.
+   HIGH      src/Plugin/Block/GreetingBlock.php:41  Output varies per user, no `user` cache context → cross-user leak via render cache.
    LOW       …
    INFO      …
    ```
@@ -41,7 +43,7 @@ Reviewing any Drupal change: your own before claiming done (light pass), someone
 
 ## Works with process skills
 
-Superpowers' `requesting-code-review` / SDD task reviewer receive `[GLOBAL_CONSTRAINTS]`; paste the review lens summary there so the reviewer subagent applies it. `receiving-code-review` governs how findings are acted on (verify before accepting).
+Superpowers' SDD task reviewer has a `[GLOBAL_CONSTRAINTS]` slot; its `requesting-code-review` template has `[PLAN_OR_REQUIREMENTS]` instead. Paste the review lens summary into whichever slot the template offers so the reviewer subagent applies it. `receiving-code-review` governs how findings are acted on (verify before accepting).
 
 ## Red flags
 

@@ -1,6 +1,6 @@
 ---
 project_env: DSP_LAB_D10
-reset_script: "${DRUPAL_SP_ROOT:-/Users/lukassykora/Documents/Repositories/drupal-superpowers}/scripts/lab-seed" "$PWD" legacy_tools >/dev/null; true
+reset_script: "$DRUPAL_SP_ROOT/scripts/lab-seed" "$PWD" legacy_tools >/dev/null; true
 runs: 1
 tags: [integration, wrong-version]
 max_turns: 18

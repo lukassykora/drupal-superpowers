@@ -11,7 +11,7 @@ set -u
 
 DIR="."; QUICK=0; SUMMARY=0
 for a in "$@"; do case "$a" in --quick) QUICK=1;; --summary) SUMMARY=1;; -*) ;; *) DIR=$a;; esac; done
-read -r ROOT KIND <<<"$(dsp_find_root "$DIR")"
+read -r KIND ROOT <<<"$(dsp_find_root "$DIR")"
 [ "$KIND" = "none" ] && ROOT=$(cd "$DIR" && pwd)
 DOCROOT=$(dsp_find_docroot "$ROOT"); D="$ROOT/$DOCROOT"; [ "$DOCROOT" = "." ] && D="$ROOT"
 
@@ -23,7 +23,7 @@ PREFIX_COMPOSER=""; PREFIX_NPM=""; PREFIX_PHP=""
 # ---- DDEV
 if [ -f "$ROOT/.ddev/config.yaml" ]; then
   DECLARED="$DECLARED ddev"
-  NAME=$(grep -E '^name:' "$ROOT/.ddev/config.yaml" | head -1 | awk '{print $2}' | tr -d '"')
+  NAME=$(grep -E '^name:' "$ROOT/.ddev/config.yaml" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*#.*$//' | tr -d "\"'")
   if dsp_have ddev; then
     ADAPTER="ddev"; PREFIX_EXEC="ddev exec"; PREFIX_DRUSH="ddev drush"; PREFIX_COMPOSER="ddev composer"; PREFIX_NPM="ddev npm"; PREFIX_PHP="ddev exec php"
     SITE_URL="https://${NAME:-project}.ddev.site"; STATE="unknown"
@@ -39,7 +39,7 @@ fi
 # ---- Lando
 if [ "$ADAPTER" = "none" ] && [ -f "$ROOT/.lando.yml" ]; then
   DECLARED="$DECLARED lando"
-  NAME=$(grep -E '^name:' "$ROOT/.lando.yml" | head -1 | awk '{print $2}' | tr -d '"')
+  NAME=$(grep -E '^name:' "$ROOT/.lando.yml" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*#.*$//' | tr -d "\"'")
   if dsp_have lando; then
     ADAPTER="lando"; PREFIX_EXEC="lando ssh -c"; PREFIX_DRUSH="lando drush"; PREFIX_COMPOSER="lando composer"; PREFIX_NPM="lando npm"; PREFIX_PHP="lando php"
     SITE_URL="https://${NAME:-project}.lndo.site"; EVIDENCE="$EVIDENCE|.lando.yml + lando binary"
@@ -51,11 +51,14 @@ if [ "$ADAPTER" = "none" ]; then
   for cf in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
     [ -f "$ROOT/$cf" ] || continue
     DECLARED="$DECLARED compose"
-    SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}' "$ROOT/$cf" | grep -Ei '^(php|web|app|drupal|appserver|cli)$' | head -1)
-    [ -z "$SVC" ] && SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1; exit}' "$ROOT/$cf")
+    # First-level children of services:, whatever the indentation (2 or 4 spaces, tabs).
+    SVCS=$(awk '/^services:/{f=1;next} f&&/^[^ \t#]/{f=0} f&&/^[ \t]+[A-Za-z0-9_.-]+:/{ m=match($0,/[^ \t]/); if(!ind) ind=m; if(m==ind){s=$1;sub(":","",s);print s} }' "$ROOT/$cf")
+    SVC=$(printf '%s\n' "$SVCS" | grep -Ei '^(php|web|app|drupal|appserver|cli)$' | head -1)
+    [ -z "$SVC" ] && SVC=$(printf '%s\n' "$SVCS" | head -1)
+    if [ -z "$SVC" ]; then EVIDENCE="$EVIDENCE|$cf has no services"; break; fi
     if dsp_have docker; then
       # Project name: COMPOSE_PROJECT_NAME, then top-level "name:" in the compose file, else Docker's default (directory name).
-      PN=${COMPOSE_PROJECT_NAME:-$(grep -E '^name:' "$ROOT/$cf" | head -1 | awk '{print $2}' | tr -d '"')}
+      PN=${COMPOSE_PROJECT_NAME:-$(grep -E '^name:' "$ROOT/$cf" | head -1 | sed -E 's/^name:[[:space:]]*//; s/[[:space:]]*#.*$//' | tr -d "\"'")}
       DC="docker compose${PN:+ -p $PN}"
       ADAPTER="compose"; PREFIX_EXEC="$DC exec $SVC"; PREFIX_DRUSH="$DC exec $SVC vendor/bin/drush"; PREFIX_COMPOSER="$DC exec $SVC composer"; PREFIX_NPM="$DC exec $SVC npm"; PREFIX_PHP="$DC exec $SVC php"
       EVIDENCE="$EVIDENCE|$cf service $SVC + docker binary"
@@ -121,12 +124,14 @@ else
     LOCAL_SIGNALS=0; REMOTE_SIGNALS=0
     case "$ADAPTER" in ddev|lando|compose) LOCAL_SIGNALS=1;; esac
     if [ -f "$SP" ]; then
-      hosts=$(grep -o "'host' *=> *'[^']*'" "$SP" 2>/dev/null | sed "s/.*'\([^']*\)'$/\1/" | tr '\n' ' ')
+      # Only uncommented lines: the stock settings.php documents example hosts and patterns in comments.
+      SPC=$(grep -v -E '^[[:space:]]*(\*|#|//|/\*)' "$SP" 2>/dev/null)
+      hosts=$(printf '%s\n' "$SPC" | grep -o "'host' *=> *'[^']*'" | sed "s/.*'\([^']*\)'$/\1/" | tr '\n' ' ')
       for h in $hosts; do case "$h" in localhost|127.0.0.1|db|database|mariadb|mysql|postgres|pgsql|ddev*|host.docker.internal) LOCAL_SIGNALS=1;; *) REMOTE_SIGNALS=1; ENV_EV="db host $h";; esac; done
-      if grep -q 'trusted_host_patterns' "$SP"; then
-        if grep -A5 'trusted_host_patterns' "$SP" | grep -Eq '\\.(com|org|net|io|cz|de|example)' ; then REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }non-local trusted_host_patterns"; fi
+      if printf '%s\n' "$SPC" | grep -q 'trusted_host_patterns'; then
+        if printf '%s\n' "$SPC" | grep -A5 'trusted_host_patterns' | grep -Ev 'example\\?\.(com|org)' | grep -Eq '\\.(com|org|net|io|cz|de|eu|sk|example)' ; then REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }non-local trusted_host_patterns"; fi
       fi
-      grep -Eq 'AH_SITE_ENVIRONMENT|PANTHEON_ENVIRONMENT|PLATFORM_|LAGOON' "$SP" && { REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }hosting env vars referenced in settings.php"; }
+      printf '%s\n' "$SPC" | grep -Eq 'AH_SITE_ENVIRONMENT|PANTHEON_ENVIRONMENT|PLATFORM_|LAGOON' && { REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }hosting env vars referenced in settings.php"; }
     fi
     if [ $REMOTE_SIGNALS -eq 1 ]; then ENV_CLASS="UNKNOWN"
     elif [ $LOCAL_SIGNALS -eq 1 ]; then ENV_CLASS="LOCAL"; ENV_EV="${ENV_EV:+$ENV_EV; }local runtime/db host"
@@ -165,3 +170,4 @@ if [ $SUMMARY -eq 1 ]; then
 else
   printf '%s\n' "$J"
 fi
+exit 0

@@ -13,5 +13,5 @@ Run only the rows whose "applies when" holds. Each row is a question with the ar
 | Deployment | schema, config, data, or index changes | What must run on deploy and in which order? | `hook_update_N`, `post_update`, config export, `drush cr`, reindex; the project's own deploy order |
 | Backward compatibility | contrib-shaped module or public API | Who else calls this? | deprecation path, BC layer, `core_version_requirement` |
 | Testability | always for bounded/architectural | Which test level proves the behaviour? | Kernel/Functional test plan (`drupal-testing`) |
-| Performance | loads many entities, runs on every request, or calls external services | What is the cost per request and how is it bounded? | query limits, caching, queue, lazy builders (`drupal-performance` in Phase 2) |
+| Performance | loads many entities, runs on every request, or calls external services | What is the cost per request and how is it bounded? | query limits, caching, queue, lazy builders (`drupal-performance`) |
 | Scope | always | What is deliberately not changed? | list of adjacent problems reported separately |

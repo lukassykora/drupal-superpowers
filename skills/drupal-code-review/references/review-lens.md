@@ -38,6 +38,7 @@ Questions per area, with what to open. Severity guidance in brackets.
 ## Coding standards and maintainability
 - phpcs Drupal/DrupalPractice clean; docblocks (`Implements hook_X().`, `{@inheritdoc}`); `t()` for UI strings; naming per project. [LOW]
 - No unrelated refactoring, no dead code, no boilerplate files. [LOW]
+- Identifiers, machine names, comments, docblocks, and YAML labels in English; user-facing text through `t()` (non-English hard-coded strings or identifiers are a finding). [LOW; MEDIUM for machine names, which cannot be renamed later without an update path]
 - Readable: one responsibility per class/method; no hidden side effects. [LOW]
 
 ## Deployment impact

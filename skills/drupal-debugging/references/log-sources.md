@@ -10,8 +10,8 @@ Run through the adapter from `drupal-runtime` (prefix `ddev exec`, `lando ssh -c
 | Web server access log | `ddev logs -s web`, nginx/apache access log | status codes, slow requests, the actual URL hit |
 | Full exception on screen (LOCAL only) | `$config['system.logging']['error_level'] = 'verbose';` in `settings.local.php` (write; revert after) | stack trace in the browser |
 | Drupal status | `drush status --format=json`, `drush core:requirements --severity=1` | bootstrap, DB, PHP version, warnings/errors on the status report |
-| Container / routes | `drush cr` (rebuild; exception text names the cause), `drush router`, `drush php:eval` for read-only introspection | compile errors, route table |
-| Config | `drush config:status`, `drush config:get <name>`, `drush cim --preview=diff` | drift, actual values, what an import would change |
+| Container / routes | `drush cr` (rebuild; exception text names the cause), `drush route`, `drush php:eval` for read-only introspection | compile errors, route table |
+| Config | `drush config:status`, `drush config:get <name>`, `drush cim --diff --no` | drift, actual values, what an import would change |
 | Cache headers | `curl -sI <url>` → `X-Drupal-Cache`, `X-Drupal-Dynamic-Cache`, `Cache-Control`, `Vary` | whether the page came from page cache / dynamic page cache |
 | Browser | console (JS errors), network (failed/slow requests, AJAX bodies), Elements (rendered markup) | front-end and AJAX failures |
 | Tests | `phpunit --debug`, `BROWSERTEST_OUTPUT_DIRECTORY` HTML dumps | the page the functional test saw |

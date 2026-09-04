@@ -10,19 +10,22 @@ set -u
 DIR="."; NOCACHE=0; SUMMARY=0
 for a in "$@"; do case "$a" in --no-cache) NOCACHE=1;; --summary) SUMMARY=1;; -*) ;; *) DIR=$a;; esac; done
 
-read -r ROOT KIND <<<"$(dsp_find_root "$DIR")"
+read -r KIND ROOT <<<"$(dsp_find_root "$DIR")"
 
 if [ "$KIND" = "none" ]; then
-  printf '{"schema":1,"generated_at":%s,"composer_root":null,"project_kind":"unknown","drupal":null,"note":"no Drupal project found walking up from %s"}\n' "$(dsp_jstr "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" "$(cd "$DIR" && pwd)"
+  printf '{"schema":1,"generated_at":%s,"composer_root":null,"project_kind":"unknown","drupal":null,"note":%s}\n' "$(dsp_jstr "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" "$(dsp_jstr "no Drupal project found walking up from $(cd "$DIR" && pwd)")"
   exit 0
 fi
 
 # ---- cache
+DOCROOT_GUESS=$(dsp_find_docroot "$ROOT")
 DATA=$(dsp_data_dir)
 KEY=$(printf '%s' "$ROOT" | (dsp_have shasum && shasum | cut -c1-12 || cksum | cut -d' ' -f1))
 CACHE="$DATA/profiles/$KEY.json"
 STAMP=""
-for f in composer.lock composer.json .ddev/config.yaml .lando.yml .mcp.json; do [ -f "$ROOT/$f" ] && STAMP="$STAMP $(stat -f '%m' "$ROOT/$f" 2>/dev/null || stat -c '%Y' "$ROOT/$f" 2>/dev/null)"; done
+if stat -c '%Y' / >/dev/null 2>&1; then mt() { stat -c '%Y' "$1"; }; else mt() { stat -f '%m' "$1"; }; fi
+for f in composer.lock composer.json .ddev/config.yaml .lando.yml .mcp.json; do [ -f "$ROOT/$f" ] && STAMP="$STAMP $(mt "$ROOT/$f" 2>/dev/null)"; done
+for d in "$DOCROOT_GUESS/modules/custom" "$DOCROOT_GUESS/themes/custom"; do [ -d "$ROOT/$d" ] && STAMP="$STAMP $(ls "$ROOT/$d" | wc -l | tr -d ' ')"; done
 if [ $NOCACHE -eq 0 ] && [ -f "$CACHE" ] && [ -f "$CACHE.stamp" ] && [ "$(cat "$CACHE.stamp")" = "$STAMP" ]; then
   if [ $SUMMARY -eq 1 ]; then "$0" "$DIR" --summary --no-cache; else cat "$CACHE"; fi
   exit 0
@@ -51,11 +54,13 @@ else
     if [ -n "$c" ]; then DRUPAL_VERSION=$(echo "$c" | grep -o '[0-9]\+\(\.[0-9]\+\)*' | head -1); DRUPAL_SOURCE="composer.json-constraint"; fi
   fi
 fi
-MAJOR=${DRUPAL_VERSION%%.*}; MINOR=""; case "$DRUPAL_VERSION" in *.*) MINOR=$(echo "$DRUPAL_VERSION" | cut -d. -f2 | grep -o '^[0-9]*');; esac
+MAJOR=${DRUPAL_VERSION#dev-}; MAJOR=${MAJOR%%.*}; MINOR=""; case "$DRUPAL_VERSION" in *.*) MINOR=$(echo "${DRUPAL_VERSION#dev-}" | cut -d. -f2 | grep -o '^[0-9]*');; esac
+case "$MAJOR" in ''|*[!0-9]*) MAJOR="";; esac; case "$MINOR" in ''|*[!0-9]*) MINOR="";; esac
 
 # ---- router
 ROUTER='{"class":"unknown","eol_date":null,"note":"no version detected"}'
-[ -n "$DRUPAL_VERSION" ] && ROUTER=$("$(dirname "$0")/drupal-facts" class "$DRUPAL_VERSION" --json)
+if [ -n "$DRUPAL_VERSION" ]; then ROUTER=$("$(dirname "$0")/drupal-facts" class "$DRUPAL_VERSION" --json 2>/dev/null) || ROUTER=""; fi
+[ -n "$ROUTER" ] || ROUTER='{"class":"unknown","eol_date":null,"note":"router unavailable (no JSON engine or unknown version)"}'
 
 # ---- distribution
 DIST="core"
@@ -92,14 +97,15 @@ CONFIG_SYNC=""
 if [ -f "$D/sites/default/settings.php" ]; then CONFIG_SYNC=$(grep -v '^ *\(#\|//\)' "$D/sites/default/settings.php" 2>/dev/null | grep -o "config_sync_directory'\] *= *'[^']*'" | head -1 | sed "s/.*'\([^']*\)'$/\1/"); fi
 [ -z "$CONFIG_SYNC" ] && [ -f "$D/sites/default/settings.php" ] && CONFIG_SYNC=$(grep -v '^ *\(#\|//\)' "$D/sites/default/settings.php" | grep -o "config_sync_directory'\] *= *[^;]*" | head -1 | sed "s/.*= *//")
 [ -z "$CONFIG_SYNC" ] && [ -d "$ROOT/config/sync" ] && CONFIG_SYNC="config/sync"
-CONFIG_SPLIT=false; { haslock drupal/config_split || ls "$ROOT/${CONFIG_SYNC#../}"/config_split.*.yml >/dev/null 2>&1; } && CONFIG_SPLIT=true
+case "$CONFIG_SYNC" in /*) SYNC_ABS=$CONFIG_SYNC;; "") SYNC_ABS="";; *) SYNC_ABS="$D/$CONFIG_SYNC";; esac   # Drupal resolves relative sync paths against the docroot
+CONFIG_SPLIT=false; { haslock drupal/config_split || { [ -n "$SYNC_ABS" ] && ls "$SYNC_ABS"/config_split.*.yml >/dev/null 2>&1; }; } && CONFIG_SPLIT=true
 
 # ---- modules
 CONTRIB=$(printf '%s\n' "$LOCKV" | awk '$1 ~ /^drupal\// && $1 !~ /^drupal\/(core|coder|cms$|recommended-project|legacy-project)/ {sub("drupal/","",$1); print $1}' | sort)
 PATCHED=""; [ -f "$CJ" ] && PATCHED=$(dsp_json keys "$CJ" extra.patches || true)
 
 # ---- features
-EXT="$ROOT/${CONFIG_SYNC#../}/core.extension.yml"; [ -f "$EXT" ] || EXT=""
+EXT="${SYNC_ABS:+$SYNC_ABS/core.extension.yml}"; [ -n "$EXT" ] && [ -f "$EXT" ] || EXT=""
 extmod() { [ -n "$EXT" ] && grep -q "^  $1:" "$EXT"; }
 MULTISITE=false; [ -f "$D/sites/sites.php" ] && MULTISITE=true
 MULTILINGUAL=false; { extmod language || extmod content_translation; } && MULTILINGUAL=true
@@ -108,7 +114,7 @@ WORKSPACES=false; extmod workspaces && WORKSPACES=true
 SEARCH="none"; haslock drupal/search_api_solr && SEARCH="search_api_solr"; [ "$SEARCH" = none ] && haslock drupal/search_api && SEARCH="search_api"; [ "$SEARCH" = none ] && extmod search && SEARCH="core"
 QUEUE="core"; haslock drupal/advancedqueue && QUEUE="advancedqueue"
 CRON="core"; haslock drupal/ultimate_cron && CRON="ultimate_cron"
-DBTYPE="unknown"; [ -f "$D/sites/default/settings.php" ] && DBTYPE=$(grep -o "'driver' *=> *'[a-z]*'" "$D/sites/default/settings.php" 2>/dev/null | head -1 | sed "s/.*'\([a-z]*\)'$/\1/"); [ -z "$DBTYPE" ] && DBTYPE="unknown"
+DBTYPE=""; for sp in "$D/sites/default/settings.php" "$D/sites/default/settings.local.php" "$D/sites/default/settings.ddev.php"; do [ -f "$sp" ] || continue; v=$(grep -v '^ *\(\*\|#\|//\|/\*\)' "$sp" 2>/dev/null | grep -o "'driver' *=> *'[a-z]*'" | tail -1 | sed "s/.*'\([a-z]*\)'$/\1/"); [ -n "$v" ] && DBTYPE=$v; done; [ -z "$DBTYPE" ] && DBTYPE="unknown"
 
 # ---- quality
 first_existing() { for f in "$@"; do [ -e "$ROOT/$f" ] && { echo "$f"; return; }; done; }
@@ -190,3 +196,4 @@ if [ $SUMMARY -eq 1 ]; then
 else
   printf '%s\n' "$J"
 fi
+exit 0

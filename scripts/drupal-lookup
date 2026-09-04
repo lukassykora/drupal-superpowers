@@ -17,6 +17,9 @@ set -u
 Q=""; KIND="any"; BRANCH=""; DIR="."; OFFLINE=0; MAX=20
 while [ $# -gt 0 ]; do
   case "$1" in
+    --kind|--branch|--dir|--max) [ -n "${2:-}" ] || { echo "usage: $1 needs a value"; exit 1; };;
+  esac
+  case "$1" in
     --kind) KIND=$2; shift;; --branch) BRANCH=$2; shift;; --dir) DIR=$2; shift;; --offline) OFFLINE=1;; --max) MAX=$2; shift;;
     -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
     *) Q="${Q:+$Q }$1";;
@@ -24,7 +27,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$Q" ] || { echo "usage: drupal-lookup <symbol|words> [--kind ...] [--branch 11.x] [--dir <project>]"; exit 1; }
 
-read -r ROOT RKIND <<<"$(dsp_find_root "$DIR")"
+read -r RKIND ROOT <<<"$(dsp_find_root "$DIR")"
 DOCROOT=$(dsp_find_docroot "$ROOT"); CORE="$ROOT/$DOCROOT/core"; [ "$DOCROOT" = "." ] && CORE="$ROOT/core"
 VERSION=""; [ -f "$ROOT/composer.lock" ] && VERSION=$(dsp_json lockversions "$ROOT/composer.lock" | awk '$1=="drupal/core"{print $2}')
 [ -z "$VERSION" ] && [ -f "$CORE/lib/Drupal.php" ] && VERSION=$(grep -o "const VERSION = '[^']*'" "$CORE/lib/Drupal.php" | sed "s/.*'\([^']*\)'/\1/")

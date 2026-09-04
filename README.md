@@ -4,13 +4,13 @@ A Claude Code plugin that makes Claude work through Drupal tasks the way an expe
 
 It is not a prompt collection and not a code generator. It is an orchestration and verification layer on top of the sources Drupal already has: the installed core source, change records, api.drupal.org, the coding standards, and the community's AI Best Practices.
 
-Status: **0.2.0-dev, MVP + Phase 2 (frontend, performance, Migrate API, legacy/frontend/performance agents)** (see [docs/architecture.md](docs/architecture.md) §13 and the evals results in [docs/evals.md](docs/evals.md) §8).
+Status: **0.2.0, MVP + Phase 2 (frontend, performance, Migrate API, legacy/frontend/performance agents)** (see [docs/architecture.md](docs/architecture.md) §13 and the evals results in [docs/evals.md](docs/evals.md) §8).
 
 ## What it does
 
 | Capability | How |
 |---|---|
-| Never assumes the Drupal version, docroot, runtime, or commands | `scripts/drupal-profile` and `scripts/drupal-runtime` read `composer.lock`, `.ddev/`, `.lando.yml`, settings, CI files; the SessionStart hook shows a 10-line brief in Drupal repos |
+| Never assumes the Drupal version, docroot, runtime, or commands | `scripts/drupal-profile` and `scripts/drupal-runtime` read `composer.lock`, `.ddev/`, `.lando.yml`, settings, CI files; the SessionStart hook shows a short brief plus a skill routing table in Drupal repos |
 | Applies APIs that exist in the project's version | Version router (current / previous / EOL / dev), a small registry of version-gated facts with change-record citations, and `scripts/drupal-lookup` that greps the installed core before anything else |
 | Designs Drupal-natively | Decision tables: service vs plugin vs hook vs event, config vs content vs state vs tempstore, queue vs sync, core vs contrib vs custom; a design-review checklist for security, access, cacheability, config, translations, deployment |
 | Treats security and cacheability as correctness | Checklists, access layers, output-escaping rules, cache metadata rules, and read-only reviewer agents that classify findings (confirmed / probable / defense-in-depth / false positive) |
@@ -54,11 +54,11 @@ Then ask for work in plain language. Skills activate on their own:
 - "This page sometimes shows data for the previous user after login. Fix it." → debugging, cacheability, testing, verification.
 - "Upgrade legacy_tools to Drupal 11." → upgrade skill and the upgrade-specialist agent.
 
-Explicit entry points: `/drupal-superpowers:understand-project`, `:debug`, `:audit`, `:review`, `:verify`, `:upgrade`, `:setup-mcp`.
+Explicit entry points (user-invocable skills): `/drupal-superpowers:drupal-project-understanding`, `:drupal-debugging`, `:drupal-security`, `:drupal-code-review`, `:drupal-verification`, `:drupal-upgrade`, `:drupal-setup-mcp`.
 
 ## Architecture in one paragraph
 
-Nineteen capability skills (short `SKILL.md`, detail in `references/`), eight agents (read-only researcher, security reviewer, code reviewer, performance reviewer, legacy archaeologist; test engineer, upgrade specialist, frontend specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
+Twenty capability skills (short `SKILL.md`, detail in `references/`), eight agents (read-only researcher, security reviewer, code reviewer, performance reviewer, legacy archaeologist; test engineer, upgrade specialist, frontend specialist), four hooks (session brief, Bash guard, PHP lint, stop-gate reminder), and a handful of zero-dependency scripts (`drupal-profile`, `drupal-runtime`, `drupal-facts`, `drupal-lookup`). Version knowledge is computed from the project and verified against the installed core; the only static data is a dated support matrix and a small facts registry with citations. Full design: [docs/architecture.md](docs/architecture.md); why it looks like this: [docs/ecosystem-analysis.md](docs/ecosystem-analysis.md).
 
 ## Superpowers interoperability
 
@@ -82,7 +82,23 @@ If your project has no runnable environment, Claude may offer to create a throw-
 
 ### Optional Drupal MCP
 
-`/drupal-superpowers:setup-mcp` writes a project-scoped `.mcp.json` from templates for MCP Tools (recommended, read scope), MCP Server 2.x, or drush-mcp. Credentials go in environment variables, never in the file. Detection at runtime is by tool names, so any of these servers configured by hand works too.
+`/drupal-superpowers:drupal-setup-mcp` writes a project-scoped `.mcp.json` from templates for MCP Tools (recommended, read scope), MCP Server 2.x, or drush-mcp. Credentials go in environment variables, never in the file. Detection at runtime is by tool names, so any of these servers configured by hand works too.
+
+## Model routing
+
+The plugin follows Claude Code's model guidance: everyday coding stays on the model you run the session with (Sonnet or `opusplan` recommended), reasoning-heavy skills escalate the current turn to Opus, and architecture/brainstorming plus hard-debugging escalation use Fable.
+
+| What | Model / effort |
+|---|---|
+| Everyday skills (module development, testing, config, research, verification, frontend, migrations) | your session model |
+| `drupal-architecture` (architectural-class design, brainstorming) | Fable, xhigh (rest of the turn; bounded changes use its decision tables without invoking it) |
+| `drupal-debugging`, `drupal-code-review`, `drupal-security`, `drupal-upgrade`, `drupal-performance` | Opus, high (rest of the turn) |
+| `drupal-hard-problem` (debugging after two falsified hypotheses, intermittent bugs, unsettled design) | Fable, xhigh |
+| Agents: researcher, test engineer | Sonnet |
+| Agents: frontend specialist | Sonnet, high |
+| Agents: code/security/performance reviewers, upgrade specialist, legacy archaeologist | Opus, high |
+
+Recommended session setup: `/model sonnet` (or `/model opusplan` to plan on Opus and execute on Sonnet). Override any agent by placing a same-named file in `.claude/agents/` or `~/.claude/agents/`; force every subagent onto one model with `CLAUDE_CODE_SUBAGENT_MODEL` + `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. Details and rationale: [docs/taxonomy.md](docs/taxonomy.md) §4c.
 
 ## Security model
 

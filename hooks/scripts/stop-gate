@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook: if Drupal code/config files were edited in this session and the last assistant message
 # carries no verification report, ask once (decision: block) for the report. Exits 0 when stop_hook_active
-# is set, so it can never loop.
+# is set, so it can never loop. Requires a persisted session transcript.
 set -u
 PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 . "$PLUGIN/scripts/lib/common.sh"
@@ -16,15 +16,18 @@ rm -f "$tmp"
 [ "$active" = "true" ] && exit 0
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
 
-# Edits to Drupal-shaped files (custom modules/themes, config, .install, services/routing yml).
-edited=$(grep -o '"file_path":"[^"]*"' "$transcript" 2>/dev/null | grep -E 'modules/custom|themes/custom|/config/|\.(module|install|theme|services\.yml|routing\.yml|permissions\.yml|php)"' | sort -u | wc -l | tr -d ' ')
-# Edits performed through Bash (sed -i, redirects, tee, heredocs) on Drupal-shaped paths.
-bashed=$(grep -oE '"command":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null | grep -E '(sed -i|>>?|tee |cat >|python3? -|php -r)' | grep -E 'modules/custom|themes/custom|/config/|\.(module|install|theme|yml|php)' | wc -l | tr -d ' ')
-edited=$(( ${edited:-0} + ${bashed:-0} ))
-[ "${edited:-0}" -eq 0 ] && exit 0
+DRUPAL_PATH='modules/custom|themes/custom|/config/|\.(module|install|theme|services\.yml|routing\.yml|permissions\.yml|php)'
 
-# Look for a verification report in the last assistant text.
-last=$(grep '"role":"assistant"' "$transcript" | tail -3)
+# Edits made with the Edit/Write/MultiEdit tools (anchored on the tool name, so Read calls do not count).
+edited=$(grep -oE '"name":"(Edit|Write|MultiEdit)","input":\{"file_path":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null | grep -E "$DRUPAL_PATH" | sort -u | wc -l | tr -d ' ')
+# Edits performed through Bash: sed -i, tee, heredoc/redirect writes (not 2> or >/dev/null), python/php writers.
+bashed=$(grep -oE '"name":"Bash","input":\{"command":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null \
+  | grep -E '(sed -i|tee |cat *>|(^|[^0-9&])>>? *[^&/ ]|python3? -|php -r)' | grep -Ev '>>? */dev/null' | grep -E "$DRUPAL_PATH" | wc -l | tr -d ' ')
+edited=$(( ${edited:-0} + ${bashed:-0} ))
+[ "$edited" -eq 0 ] && exit 0
+
+# Verification report markers in the TEXT blocks of the last assistant message only.
+last=$(grep '"role":"assistant"' "$transcript" | tail -1 | grep -oE '"type":"text","text":"([^"\\]|\\.)*"')
 if printf '%s' "$last" | grep -Eq 'NOT VERIFIED|NOT APPLICABLE|VERIFY L[123]|Verified:|Not verified:'; then exit 0; fi
 
 ctx="drupal-superpowers: $edited Drupal file(s) were edited in this session but the reply has no verification report. Use the drupal-verification skill (drupal-superpowers:drupal-verification) and end with a short report: what was verified (coding standards, static analysis, tests, runtime) and what is NOT VERIFIED with the reason. Keep the rest of your reply as it was."

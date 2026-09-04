@@ -1,6 +1,8 @@
 ---
 name: drupal-performance
 description: Use when a Drupal page, route, Views listing, cron, queue, or migration is slow or memory-heavy, when code loads entities in loops (N+1), runs queries per row, calls external APIs in requests, or when asked to profile, benchmark, or review Drupal performance and cache hit rates.
+model: opus
+effort: high
 ---
 
 # Drupal performance

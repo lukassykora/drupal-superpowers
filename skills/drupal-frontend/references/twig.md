@@ -36,5 +36,5 @@
 
 ## Verification
 - `drush cr` after adding templates or suggestions (theme registry).
-- `drush twig:lint <theme dir>` (Drush 12+) or the project's Twig lint; Twig debug on LOCAL (`sites/development.services.yml`, `twig.config: debug: true`) shows which template rendered.
+- `drush twig:compile` (compiles every template; syntax errors surface) or the project's Twig linter (twigcs/twig-lint); Twig debug on LOCAL (`sites/development.services.yml`, `twig.config: debug: true`) shows which template rendered.
 - Core references: `core/themes/olivero/templates/`, `core/modules/system/templates/`, `core/lib/Drupal/Core/Template/TwigExtension.php` (available filters/functions).

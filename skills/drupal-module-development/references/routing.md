@@ -33,7 +33,7 @@ saved_items.api:
 |---|---|
 | `_permission: 'x'` (comma = AND, `+` = OR) | most routes |
 | `_entity_access: 'node.update'` | routes with an entity parameter; runs the entity access handler |
-| `_custom_access: '\Drupal\m\Access\FooAccess::access'` or `_access_check` service | complex rules; return `AccessResult` with cacheability |
+| `_custom_access: '\Drupal\m\Access\FooAccess::access'`, or a custom access checker service tagged `{ name: access_check, applies_to: _saved_items_access }` with the route requirement `_saved_items_access: 'TRUE'` | complex rules; return `AccessResult` with cacheability |
 | `_role: 'administrator'` | rarely; permissions are better |
 | `_user_is_logged_in: 'TRUE'` | authenticated-only |
 | `_csrf_token: 'TRUE'` | state-changing GET links (prefer POST forms) |
@@ -82,5 +82,5 @@ final class SavedItemsController extends ControllerBase {
 `src/Routing/RouteSubscriber.php` extends `RouteSubscriberBase`, `alterRoutes(RouteCollection $collection)`; registered as an event subscriber. Use for tightening access on core routes; core example `modules/node/src/Routing/RouteSubscriber.php`.
 
 ## Verification
-- `drush router` (Drush 12+) or `drush route --name=<name>` lists the route; `drush cr` rebuilds.
+- `drush route` (all routes), `drush route --name=<name>` or `--path=<path>` (Drush 10.5+) lists routes; `drush cr` rebuilds.
 - Functional test: anonymous → 403/302, user without permission → 403, with permission → 200 (`drupal-testing`).

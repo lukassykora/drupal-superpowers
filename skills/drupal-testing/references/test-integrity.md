@@ -6,7 +6,7 @@ A test is evidence only if it would fail when the behaviour is wrong. The follow
 |---|---|---|
 | Deleting or commenting out an assertion | the test now proves less than it claims | fix the code, or change the expectation with a written reason tied to a spec change |
 | Changing an expected value to whatever the implementation returns | encodes the bug | trace why the value differs; the test or the code is wrong, decide which with evidence |
-| `markTestSkipped()` / `#[Skip]` without a reason string | hides a failure | skip only for a real environmental precondition, with the reason, and report it as NOT VERIFIED |
+| `markTestSkipped()` (or a `#[RequiresPhpExtension]`-style precondition attribute) without a reason string | hides a failure | skip only for a real environmental precondition, with the reason, and report it as NOT VERIFIED |
 | Mocking the service/method under test | tests the mock | move to Kernel level and use the real service |
 | Stubbing the container wholesale in a Unit test | tests nothing real | inject dependencies; or Kernel test |
 | A test with zero assertions ("it didn't throw") | proves only absence of exceptions | assert the observable result; `expectNotToPerformAssertions()` only for genuine smoke checks and say so |

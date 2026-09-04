@@ -26,7 +26,7 @@ source analysis → destination model → field map → migration YAML (files/te
 
 ## 5. Running (through the adapter, LOCAL/DISPOSABLE)
 ```bash
-drush cr && drush migrate:status --group=partners      # discovery (plain YAML needs cr; config entities need cim)
+drush cr && drush migrate:status --tag=partners        # discovery (plain YAML needs cr; config entities need cim); --group needs migrate_tools
 drush migrate:import partner_nodes --limit=10 --feedback=10
 drush migrate:messages partner_nodes                    # per-row problems, with source ids
 drush migrate:rollback partner_nodes                    # must work before the full run

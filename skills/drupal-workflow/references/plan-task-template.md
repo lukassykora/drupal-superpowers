@@ -1,6 +1,6 @@
 # Plan task template (Drupal)
 
-One task per file group; each step is one action with an exact command. Name the plugin skill a subagent must read, because subagents do not auto-discover skills.
+One task per file group; each step is one action with an exact command. Name the plugin skill a subagent must read: subagents can invoke skills, but they ignore the using-superpowers discipline and will not go looking for them on their own.
 
 ```
 ### Task N: <what changes, in Drupal terms>

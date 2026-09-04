@@ -5,7 +5,7 @@
 1. **Evidence before prose.** A skill or description changes only together with eval results: run the relevant `evals/trigger` and `evals/no-trigger` cases (and the scenario it affects) before and after, and paste the summary table into the PR.
 2. **No knowledge silos.** Reference material links to canonical sources (installed core paths, change records, coding standards, drupal.org docs) instead of restating them. Version-gated facts go into `references/versions/facts.json` with a change-record URL and a `verify_in_core` path.
 3. **Licensing.** MIT. Never paste text from GPL projects (ai_best_practices, drupaltools/skills, ablerz, any drupal.org project) or from unlicensed repositories. Adapted ideas from MIT/Apache sources are listed in `ATTRIBUTION.md`. Re-derive facts and cite the primary Drupal source.
-4. **Context budget.** `SKILL.md` ≤ ~150 lines / ~1200 words (`scripts/validate` warns above); heavy tables in `references/`; verbose work in agents.
+4. **Context budget.** `SKILL.md` ≤ ~150 lines / ~1200 words (`scripts/validate` warns above 220 lines / 1200 words); heavy tables in `references/`; verbose work in agents.
 5. **No git operations by the plugin.** Scripts and skills never commit, push, or reset.
 
 ## Adding a skill
@@ -13,7 +13,7 @@
 1. Confirm it is a capability, not a sub-topic: it answers "what can Claude now do" and has a distinct trigger moment (see `docs/taxonomy.md`). Sub-topics become `references/` pages of an existing skill.
 2. Write the trigger and no-trigger cases first (`evals/trigger/<name>/`, `evals/no-trigger/<name>/`) and, if there is a planted-defect scenario, the fixture change in `fixtures/` with its README line.
 3. Run the baseline: `scripts/run-evals --baseline --case <name>` and `--case <scenario>`; record verbatim what the model does wrong without the skill.
-4. Write the description (third person, "Use when …", trigger conditions and symptoms only, ≤ 300 chars, no workflow verbs, grep-able Drupal tokens) into `docs/taxonomy.md` and the `SKILL.md` frontmatter.
+4. Write the description (third person, "Use when …", trigger conditions and symptoms only, ≤ 400 chars (aim ≤ 300), no workflow verbs, grep-able Drupal tokens) into `docs/taxonomy.md` and the `SKILL.md` frontmatter.
 5. Write the body: Overview (core principle), When to use / not, Procedure, Decision rules, Works with process skills (Superpowers interop block), Red flags table from the observed baseline failures, links to references.
 6. Run `scripts/validate` and the trigger/no-trigger evals with the plugin; iterate on the description until both pass across 2+ runs.
 7. Add the skill to `docs/taxonomy.md` and, if user-invocable, to the README entry points.
@@ -31,7 +31,7 @@ Only when isolated context, a different permission profile, or independent judge
 
 ## Adding a hook
 
-Hooks must finish well under a second, never block on non-destructive actions, and must have a deterministic test in `scripts/validate` or a synthetic-stdin check. Destructive-command patterns go into `hooks/scripts/guard-bash` and `evals/scenarios/dangerous-env`.
+Hooks must finish well under a second and must have a deterministic test in `scripts/validate` or a synthetic-stdin check. Only the Bash guard blocks (destructive commands); the Stop hook may soft-block once for a missing verification report (architecture §8). Destructive-command patterns go into `hooks/scripts/guard-bash` and `evals/scenarios/dangerous-env`.
 
 ## Running the checks
 

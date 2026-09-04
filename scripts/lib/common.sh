@@ -92,19 +92,24 @@ PY
 }
 
 # Walk up from $1 (default cwd) to find a Drupal Composer root or a Drupal 7 root.
-# Prints "<path> <kind>" where kind is composer|d7|none.
+# Prints "<kind> <path>" where kind is composer|d7|core|none. Kind comes FIRST so that
+# `read -r KIND ROOT` keeps paths with spaces intact (read assigns the remainder to the last variable).
+# A directory containing core/lib/Drupal.php is only a candidate: the walk continues upward, because
+# for a Composer site the docroot (web/) is inside the real root.
 dsp_find_root() {
-  local dir; dir=$(cd "${1:-.}" 2>/dev/null && pwd) || { echo ". none"; return; }
+  local dir core_candidate=""
+  dir=$(cd "${1:-.}" 2>/dev/null && pwd) || { echo "none $(pwd)"; return; }
   while :; do
-    if [ -f "$dir/composer.lock" ] && grep -q '"name": *"drupal/core"' "$dir/composer.lock" 2>/dev/null; then echo "$dir composer"; return; fi
-    if [ -f "$dir/composer.json" ] && grep -Eq '"drupal/(core|core-recommended|core-composer-scaffold)"' "$dir/composer.json" 2>/dev/null; then echo "$dir composer"; return; fi
-    if [ -f "$dir/composer.json" ] && grep -Eq '"type": *"drupal-(module|theme|profile|custom-module)"' "$dir/composer.json" 2>/dev/null; then echo "$dir composer"; return; fi
-    if [ -f "$dir/includes/bootstrap.inc" ] && grep -q "DRUPAL_CORE_COMPATIBILITY', '7.x'" "$dir/includes/bootstrap.inc" 2>/dev/null; then echo "$dir d7"; return; fi
-    if [ -f "$dir/core/lib/Drupal.php" ]; then echo "$dir core"; return; fi
+    if [ -f "$dir/composer.lock" ] && grep -q '"name": *"drupal/core"' "$dir/composer.lock" 2>/dev/null; then echo "composer $dir"; return; fi
+    if [ -f "$dir/composer.json" ] && grep -Eq '"drupal/(core|core-recommended|core-composer-scaffold)"' "$dir/composer.json" 2>/dev/null; then echo "composer $dir"; return; fi
+    if [ -f "$dir/composer.json" ] && grep -Eq '"type": *"drupal-(module|theme|profile|custom-module)"' "$dir/composer.json" 2>/dev/null; then echo "composer $dir"; return; fi
+    if [ -f "$dir/includes/bootstrap.inc" ] && grep -q "DRUPAL_CORE_COMPATIBILITY', '7.x'" "$dir/includes/bootstrap.inc" 2>/dev/null; then echo "d7 $dir"; return; fi
+    if [ -z "$core_candidate" ] && [ -f "$dir/core/lib/Drupal.php" ]; then core_candidate=$dir; fi
     [ "$dir" = "/" ] && break
     dir=$(dirname "$dir")
   done
-  echo "$(pwd) none"
+  if [ -n "$core_candidate" ]; then echo "core $core_candidate"; return; fi
+  echo "none $(pwd)"
 }
 
 # Docroot relative to composer root, or "." when not found.
@@ -121,9 +126,19 @@ dsp_find_docroot() {
   echo "."
 }
 
-# Version compare: dsp_vergte A B -> 0 if A >= B (numeric dotted, pre-release suffixes ignored).
+# Normalise a Drupal/Composer version for comparison: strip pre-release suffixes, map dev branches
+# (11.x-dev, 11.x, dev-11.x) to a very high minor of that major so "since" gates treat them as newest.
+dsp_vernorm() {
+  local v=${1#dev-}; v=${v%%-*}
+  case "$v" in
+    *.x) v="${v%.x}.999.0";;
+  esac
+  printf '%s' "$v"
+}
+
+# Version compare: dsp_vergte A B -> 0 if A >= B.
 dsp_vergte() {
-  local a=${1%%-*} b=${2%%-*}
+  local a b; a=$(dsp_vernorm "$1"); b=$(dsp_vernorm "$2")
   [ "$(printf '%s\n%s\n' "$b" "$a" | sort -V | head -1)" = "$b" ]
 }
 

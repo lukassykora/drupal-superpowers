@@ -3,6 +3,8 @@ name: drupal-debugging
 description: Use when a Drupal site or test shows an error or wrong behaviour: WSOD, "The website encountered an unexpected error", ServiceNotFoundException, plugin not found, route not found, stale cache, config import or schema errors, access denied, failing drush cr; after reproducing, before changing code.
 user-invocable: true
 argument-hint: "[symptom or error text]"
+model: opus
+effort: high
 ---
 
 # Drupal debugging

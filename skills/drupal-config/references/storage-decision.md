@@ -9,7 +9,7 @@
 | Is it runtime bookkeeping that must not deploy (last cron run, last import timestamp, feature flag toggled per env, OAuth expiry)? | **State** | `\Drupal::state()->get/set()` | never |
 | Is it per-user or per-session draft/wizard data? | **PrivateTempStore** / **SharedTempStore** | `tempstore.private`/`tempstore.shared` | never; expires |
 | Can it be recomputed from other data? | **Cache** bin (with tags) or key/value with expiry | `cache.<bin>`, `keyvalue.expirable` | never |
-| Is it a translation of config? | config translation (`language/<lang>/…`) | `config_translation`, `language.config.<lang>.<name>` | yes |
+| Is it a translation of config? | config translation (`language/<lang>/…`) | `config_translation` UI; overrides live in the `language.<langcode>` collection (sync: `language/<langcode>/<name>.yml`) | yes |
 
 Consequences to state in the design:
 - Config changes need export + import in the deploy; content changes need migrations or editorial work; state changes need nothing but must be set per environment (an update hook or post-update may seed it).

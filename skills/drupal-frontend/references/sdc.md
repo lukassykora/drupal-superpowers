@@ -40,7 +40,7 @@ libraryOverrides:
   dependencies:
     - core/once
 ```
-- Props are validated against the schema when the project enables validation (`sdc.settings`/development mode); declare `required` and types; slots carry render arrays/markup.
+- Schemas are enforced always for module components and for theme components when the theme's info.yml sets `enforce_prop_schemas: true`; props are validated at render time only with Twig `debug: true`. Declare `required` and types; slots carry render arrays/markup.
 - Components are discovered per theme/module; `replaces:` lets a theme override a module component.
 
 ## Using
@@ -52,6 +52,6 @@ libraryOverrides:
 - No data fetching or business logic in components; the caller supplies props.
 - Accessibility inside the component (headings, buttons, labels) is the component's responsibility; document keyboard behaviour in the README.
 - Name components by purpose, keep variants as an `enum` prop instead of new components.
-- Test: Kernel test rendering `#type component` with `ComponentRenderTrait` or a Functional test asserting markup; visual check in the browser.
+- Test: a `KernelTestBase` test that renders `['#type' => 'component', …]` through the renderer and asserts markup (core's own tests: `core/tests/Drupal/KernelTests/Components/`), or a Functional test; visual check in the browser.
 
 Core references: `core/modules/sdc` (10.1–10.2) / `core/lib/Drupal/Core/Theme/Component` (10.3+), `core/themes/olivero/components/`? (check the installed version; Olivero adopted SDC gradually), `core/modules/system/tests/modules/sdc_test/components/`.

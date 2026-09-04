@@ -17,7 +17,7 @@ paths:
 
 ## When to use
 
-Creating a module, adding a route/controller/form/service/plugin/entity/permission/hook, or changing any of the YAML files above. Not for theme work (`drupal-frontend`, Phase 2) or for pure config changes without code (`drupal-config`).
+Creating a module, adding a route/controller/form/service/plugin/entity/permission/hook, or changing any of the YAML files above. Not for theme work (`drupal-frontend`) or for pure config changes without code (`drupal-config`).
 
 ## Procedure
 
@@ -38,12 +38,13 @@ Creating a module, adding a route/controller/form/service/plugin/entity/permissi
 
 ## Rules that apply to every file
 
-- DI in classes; `\Drupal::` only in `.module`/`.install` procedural code or where the API expects it (e.g. static `create()` bodies).
+- DI in classes; `\Drupal::` only in procedural code (`.module`, `.install`, `.theme` hooks) and where the API expects it (e.g. static `create()` bodies).
 - `declare(strict_types=1);` and typed properties/returns when the project's own modules use them; match the project otherwise.
 - Every route with data: `_permission`, `_entity_access`, `_custom_access`, or `_role`; never `_access: 'TRUE'` unless the content is public by design and you say so.
 - Every render array/response: cache metadata. Every user-facing string: `t()`/`TranslatableMarkup` with placeholders, never concatenated HTML.
 - `core_version_requirement` matches the project's major (and the next one only when tested).
 - No boilerplate "for later": no empty `.module`, no unused `libraries.yml`, no `config/install` without schema.
+- Language: all code, machine names (modules, fields, config keys, routes, services, permissions), identifiers, comments, docblocks, YAML labels/descriptions, test names, commit-ready text, and reports are written in English, whatever language the conversation uses. User-facing strings are English inside t()/TranslatableMarkup/{% trans %} so translations come from Drupal's translation system, never hard-coded in another language.
 - Update hooks: schema changes in `hook_update_N`, data/config changes in `hook_post_update_NAME`; both idempotent.
 
 ## Works with process skills

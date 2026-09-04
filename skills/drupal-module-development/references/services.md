@@ -3,16 +3,20 @@
 ## `<module>.services.yml`
 
 ```yaml
+# Style A — explicit arguments (works everywhere):
 services:
   _defaults:
-    autoconfigure: true        # 10.x+: registers event subscribers by interface
+    autoconfigure: true        # registers event subscribers by interface
   saved_items.repository:
     class: Drupal\saved_items\SavedItemsRepository
     arguments: ['@database', '@entity_type.manager', '@current_user']
-  # Autowiring (10.3+; check the project uses it before adopting):
+```
+```yaml
+# Style B — autowiring (services since 9.3; check the project uses it), class-named service + alias.
+# Never combine A and B for the same id: a duplicate YAML key breaks container compilation.
+services:
   Drupal\saved_items\SavedItemsRepository:
     autowire: true
-  # Alias so both styles resolve:
   saved_items.repository: '@Drupal\saved_items\SavedItemsRepository'
 ```
 

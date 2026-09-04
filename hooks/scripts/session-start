@@ -9,7 +9,7 @@ input=$(cat 2>/dev/null || true)
 cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p' | head -1)
 [ -z "$cwd" ] && cwd=$(pwd)
 
-read -r ROOT KIND <<<"$(dsp_find_root "$cwd")"
+read -r KIND ROOT <<<"$(dsp_find_root "$cwd")"
 [ "$KIND" = "none" ] && exit 0
 
 profile=$("$PLUGIN/scripts/drupal-profile" "$cwd" --summary 2>/dev/null | head -6)
@@ -20,6 +20,7 @@ ctx="Drupal project detected (drupal-superpowers).
 $profile
 $runtime
 Facts above come from files, not memory; anything not listed is unknown until checked.
+Language rule: write ALL code, machine names, identifiers, comments, docblocks, YAML labels, tests, and reports in English, whatever language the user writes in; user-facing strings are English inside t()/TranslatableMarkup so Drupal translates them.
 
 Two rules in this repo: (1) invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; (2) never end a reply that says done, fixed, works, or passes without invoking drupal-verification first, even for a one-line change. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
 
@@ -27,7 +28,7 @@ Skill routing (several can apply in sequence):
 - version, paths, runtime, or commands unknown → drupal-project-understanding
 - build / change / fix something in this Drupal project (no Superpowers process skill active) → drupal-workflow
 - unsure an API, service, hook, or method exists, or asked to use a named one → drupal-research
-- choosing service vs plugin vs hook, config vs content vs state, core vs contrib vs custom → drupal-architecture
+- architectural-class design (new entity/config type, integration, permission model, cross-module behaviour) or a design/brainstorming discussion → drupal-architecture (escalates the turn to the strongest model; bounded changes read its decision tables instead)
 - creating/editing module files: .info/.services/.routing/.permissions.yml, controllers, forms, plugins, entities, hooks → drupal-module-development
 - choosing or writing PHPUnit/Kernel/Functional tests, or a Drupal test fails → drupal-testing
 - an error, WSOD, ServiceNotFound, plugin/route not found, or wrong behaviour to diagnose → drupal-debugging
@@ -41,6 +42,7 @@ Skill routing (several can apply in sequence):
 - core/PHP/Symfony upgrades, deprecations, Rector, contrib major bumps → drupal-upgrade
 - theme work: Twig templates, libraries.yml, Drupal.behaviors/once, preprocess, SDC components, CSS/JS, markup accessibility → drupal-frontend
 - slow page/route/Views/cron/queue, entity loads in loops, per-row queries, profiling, cache hit rate → drupal-performance
-- migration YAML, source/process/destination plugins, drush migrate:*, importing from Drupal 7/CSV/JSON/another DB → drupal-migrate-api"
+- migration YAML, source/process/destination plugins, drush migrate:*, importing from Drupal 7/CSV/JSON/another DB → drupal-migrate-api
+- debugging or architecture still unresolved after two falsified hypotheses, intermittent/env-dependent bugs, expensive-to-reverse decisions → drupal-hard-problem (escalates this turn to the strongest model)"
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' "$(dsp_json quote "$ctx")"

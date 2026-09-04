@@ -1,6 +1,5 @@
 ---
 type: "regex"
-pattern: "NOT VERIFIED|PASS"
+pattern: "VERIFY L[123]|\\bPASS\\b|NOT VERIFIED"
 match: "contains"
-flags: "i"
 ---

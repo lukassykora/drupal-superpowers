@@ -63,21 +63,24 @@ drupal-superpowers/
 │   ├── drupal-security-reviewer.md     read-only
 │   ├── drupal-code-reviewer.md         read-only
 │   ├── drupal-test-engineer.md         runs tests, returns findings
-│   └── drupal-upgrade-specialist.md
+│   ├── drupal-upgrade-specialist.md
+│   ├── drupal-legacy-archaeologist.md  read-only (Phase 2)
+│   ├── drupal-frontend-specialist.md   (Phase 2)
+│   └── drupal-performance-reviewer.md  read-only (Phase 2)
 ├── hooks/
 │   ├── hooks.json
 │   └── scripts/{session-start,guard-bash,lint-php,stop-gate}
-├── scripts/                            zero-dependency bash; JSON via first available of php/python3/node
+├── scripts/                            zero-dependency bash; JSON via first available of php/python3 (grep fallback for the core version)
 │   ├── drupal-profile                  → Project Capability Profile JSON
 │   ├── drupal-runtime                  → runtime resolution + environment class JSON
 │   ├── drupal-lookup                   → ranked evidence for a symbol/topic
 │   ├── drupal-facts                    → version-gated fact registry query
 │   ├── run-evals                       → eval runner fallback (D9)
+│   ├── lab-seed                        → copy fixture modules into a real lab (Stage 8)
 │   └── validate                        → CI: plugin validate --strict + link check + frontmatter lint + staleness
 ├── references/
 │   ├── versions/matrix.md              dated support matrix (frontmatter: verified_against, last_reviewed, sources)
-│   ├── versions/facts.yaml             version-gated facts registry with change-record URLs
-│   ├── security/                       shared with drupal-security references
+│   ├── versions/facts.json             version-gated facts registry with change-record URLs
 │   └── patterns/                       "how core does it" index pointing at core file paths per branch
 ├── evals/                              native case format + fixtures (see §10)
 ├── fixtures/                           small synthetic Drupal trees (see §10)
@@ -165,7 +168,7 @@ Class is computed from `drupal.version` against `references/versions/matrix.md` 
 
 If the matrix is older than 120 days, the router says so in its note and the skill instructs a check against `drupal.org/project/drupal/releases` before relying on the class. The date is a warning, not a verdict (spec §64).
 
-**Version-gated fact registry** (`references/versions/facts.yaml`): a short list, each entry `{id, statement, since, until, change_record, verify_in_core: <path or symbol>}`. Initial entries: OOP hooks 11.1, hook ordering/preprocess 11.2, theme OOP hooks 11.3, plugin attributes 10.2 / required 12.0, recipes 10.3, procedural hooks not deprecated, `RunTestsInSeparateProcesses` (pending verification), Drupal 12 PHP 8.5. `drupal-facts <id> <version>` prints `applies | not-applies | unknown` plus the citation. Skills quote the citation, not the memory.
+**Version-gated fact registry** (`references/versions/facts.json`): a short list, each entry `{id, statement, since, until, change_record, verify_in_core: <path or symbol>}`. Initial entries: OOP hooks 11.1, hook ordering/preprocess 11.2, theme OOP hooks 11.3, plugin attributes 10.2 / required 12.0, recipes 10.3, procedural hooks not deprecated, `RunTestsInSeparateProcesses` required from 11.3 (CR 3548485), Drupal 12 PHP 8.5, three functions removed in 11.0. `drupal-facts check <id> <version>` prints `applies | not-applies | unknown` plus the citation. Skills quote the citation, not the memory.
 
 ### 5.3 Runtime Adapter (`scripts/drupal-runtime`) — MVP
 
@@ -280,6 +283,8 @@ Offered, never automatic (spec §29–30). Created under `${CLAUDE_PLUGIN_DATA}/
 
 ## 6. Skills
 
+> The `paths` column below is superseded by `docs/taxonomy.md` §1 decision 4 (no `paths` on symptom-driven skills; globs only on module-development, testing, config, frontend, migrate-api) and by the frontmatter itself; `docs/taxonomy.md` §2/§4b hold the authoritative descriptions.
+
 Common rules (from the writing-skills findings): frontmatter `name` + `description` (+ `user-invocable`, `paths`, `context` where noted); description third person, "Use when <moment> …", trigger conditions only, ≤ 300 chars, with grep-able Drupal tokens; body ≤ ~150 lines: Overview, When to use / not, Procedure, Decision rules, Interop block, Red flags, links to references. No workflow summary in descriptions. Every skill has trigger and no-trigger eval cases before it ships.
 
 | Skill | Status | Trigger moment (description intent) | `paths` gate | User-invocable | Key references |
@@ -334,9 +339,9 @@ Agent bodies preload the relevant skill via `skills:` frontmatter so a subagent 
 
 | Event | Matcher | Script | Behaviour |
 |---|---|---|---|
-| SessionStart | `startup\|clear\|compact` | `session-start` | Runs `drupal-profile` (cached). If no Drupal project: prints nothing. Otherwise emits the project brief (≤ 10 lines: version and router class, PHP, runtime adapter and environment class, custom module paths, test/lint commands) plus a 16-line **skill routing table** (moment → skill). Evidence for the table: the first with-plugin eval run fired only 10/16 trigger skills without it; the model did the right Drupal work but never invoked the skill. |
-| PreToolUse | `Bash` | `guard-bash` | Parses the command. If it matches the destructive list (spec §52: `drush sql-drop|sql:drop|site:install|si|cim -y|config:import -y|entity:delete|sql:query <DROP|DELETE without WHERE>`, `DROP TABLE`, `rm -rf <project root>`, `git reset --hard`, `git clean -fd`, unbounded `composer update`) and environment class ≠ DISPOSABLE → exit 2 with a one-line reason and the safe alternative (`--preview`, `sql:dump` first, disposable lab). Also warns (exit 0 + `additionalContext`) on `drush cr` outside a runtime and on `\Drupal::` introduced by `sed`. |
-| PostToolUse | `Edit\|Write` | `lint-php` | For `*.php|*.module|*.install|*.theme|*.inc|*.profile`: `php -l` via the resolved runtime; on error, `additionalContext` with the message. If `phpcs` resolves in < 1 s and a project or plugin ruleset exists, run it on that file only and report counts. Never phpstan, never phpunit. |
+| SessionStart | `startup\|clear\|compact` | `session-start` | Runs `drupal-profile` (cached). If no Drupal project: prints nothing. Otherwise emits the project brief (≤ 10 lines: version and router class, PHP, runtime adapter and environment class, custom module paths, test/lint commands) plus an 18-row **skill routing table** (moment → skill) and the English-only language rule. Evidence for the table: the first with-plugin eval run fired only 10/16 trigger skills without it; the model did the right Drupal work but never invoked the skill. |
+| PreToolUse | `Bash` | `guard-bash` | Parses the command. If it matches the destructive list (spec §52: `drush sql-drop|sql:drop|site:install|si|cim -y|config:import -y|entity:delete|sql:query <DROP|DELETE without WHERE>`, `DROP TABLE`, `rm -rf <project root>`, `git reset --hard`, `git clean -fd`, unbounded `composer update`) and environment class ≠ DISPOSABLE → exit 2 with a one-line reason and the safe alternative (`--preview`, `sql:dump` first, disposable lab). |
+| PostToolUse | `Edit\|Write` | `lint-php` | For `*.php|*.module|*.install|*.theme|*.inc|*.profile`: host `php -l`; on error, `additionalContext` with the message. `vendor/bin/phpcs` on that file when present, with the project ruleset or `Drupal,DrupalPractice`. Never phpstan, never phpunit. |
 | Stop | — | `stop-gate` | If files under custom module/theme/config paths changed this session (Edit/Write tool calls or Bash edits in the transcript) and no `VERIFY` ledger line or completion report is present in the last assistant message → `decision: block` **once** with the reason "use drupal-verification and end with a report"; exits 0 when `stop_hook_active` is set, so it cannot loop. A context-only Stop hook cannot reach the model, hence the single soft block. Verified under `claude -p` on 2026-09-04 (blocks once, report appended). Requires a persisted session transcript; set `DSP_HOOK_LOG=<file>` to trace it, `DSP_GUARD_LOG=<file>` for the Bash guard. |
 
 Not included: SubagentStart injection (agents preload skills instead), UserPromptSubmit (nothing deterministic to add), FileChanged monitors (noisy; spec §36).
@@ -346,14 +351,14 @@ Not included: SubagentStart injection (agents preload skills instead), UserPromp
 ## 9. References and staleness
 
 - Skill references are procedural and short, link to canonical sources, and never restate api.drupal.org.
-- `references/versions/matrix.md` and `facts.yaml` carry frontmatter:
+- `references/versions/matrix.md` and `facts.json` carry `last_reviewed` metadata (frontmatter / `_meta`):
 
   ```yaml
   verified_against: { drupal: "11.4.x", drupal_dev: "12.0.0-alpha1" }
   last_reviewed: 2026-09-04
   sources: [drupal.org/about/core/policies/core-release-cycles/schedule, change records listed inline]
   ```
-- `scripts/validate --staleness` fails CI when `last_reviewed` is older than 120 days, and `scripts/drupal-facts --check-upstream` (network, manual or scheduled) diffs the change-record feed for the router's branches against the fact registry and prints candidates, mirroring the monthly-issue pattern seen in the ecosystem.
+- `scripts/validate --staleness` fails CI when `last_reviewed` is older than 120 days, and a `check-upstream` subcommand for `drupal-facts` (planned, not implemented) would diff the change-record feed for the router's branches against the fact registry, mirroring the monthly-issue pattern seen in the ecosystem.
 - Facts re-derived from GPL sources are cited to the underlying change record or core file, never to the GPL skill (D11).
 
 ---
@@ -393,7 +398,7 @@ Small synthetic trees under `fixtures/`, each with a real `composer.lock` slice 
 
 ## 12. Context budget
 
-Always-on cost: manifest + 16 skill descriptions (176–308 chars) + 5 agent descriptions + hook config ≈ 1.8k tokens (measured 2026-09-04: 5575 description chars). SessionStart context (~25 lines incl. the routing table) only in Drupal repos, ≈ 400 tokens more. Per-skill body target ≤ 1.2k tokens; references loaded by explicit link. Verbose operations (test runs, log analysis, research, review, upgrade inventory) go to agents or `context: fork` skills and return ≤ 30 lines. `claude plugin details drupal-superpowers` is run in CI and the number recorded in `docs/evals.md` so regressions are visible.
+Always-on cost: manifest + 19 skill descriptions + 8 agent descriptions + hook config ≈ 2.3k tokens (re-measured after Phase 2). SessionStart context (~30 lines incl. the 18-row routing table and the language rule) only in Drupal repos, ≈ 450 tokens more. Per-skill body target ≤ 1.2k tokens; references loaded by explicit link. Verbose operations (test runs, log analysis, research, review, upgrade inventory) go to agents or `context: fork` skills and return ≤ 30 lines. `claude plugin details drupal-superpowers` is run in CI and the number recorded in `docs/evals.md` so regressions are visible.
 
 ---
 
@@ -414,6 +419,6 @@ Decisions to confirm or adjust in Stage 3, each with the default this document a
 2. `drupal-setup-mcp` as MVP or P2 (default: MVP, small, because MCP-present evals need a reproducible config).
 3. `drupal-tech-lead` dropped (default: dropped; revisit if standalone evals show orchestration failures).
 4. `paths:` gating on `drupal-security` and `drupal-cacheability` (default: on; verify it does not suppress triggering for symptom-based prompts like "shows the previous user's data").
-5. JSON helper for scripts: first available of `php`, `python3`, `node`, with a grep fallback for the core version only (default: as stated).
+5. JSON helper for scripts: first available of `php`, `python3`, with a grep fallback for the core version only (no node branch implemented).
 
 Stage 4 should write the trigger/no-trigger pairs and the 14 scenario cases against the fixtures list in §10.3 before any skill body is written, so that every skill's first version is measured against a baseline.

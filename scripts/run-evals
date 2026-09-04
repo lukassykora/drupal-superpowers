@@ -89,6 +89,7 @@ def run_claude(prompt, cwd, plugin_dir, max_turns, timeout, model, with_user_set
 
 def parse_stream(stdout):
     tools, texts, skills, results = [], [], [], []
+    results_by_id = {}
     for line in stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -103,11 +104,14 @@ def parse_stream(stdout):
                     content = c.get("content")
                     if isinstance(content, list):
                         content = "\n".join(x.get("text", "") for x in content if isinstance(x, dict))
-                    results.append(str(content or "")[:1200])
+                    text = str(content or "")[:1200]
+                    results.append(text)
+                    if c.get("tool_use_id"):
+                        results_by_id[c["tool_use_id"]] = text
         if ev.get("type") == "assistant":
             for c in (ev.get("message") or {}).get("content") or []:
                 if c.get("type") == "tool_use":
-                    tools.append({"name": c.get("name"), "input": c.get("input") or {}})
+                    tools.append({"name": c.get("name"), "input": c.get("input") or {}, "id": c.get("id")})
                     if c.get("name") == "Skill":
                         skills.append((c.get("input") or {}).get("skill"))
                 elif c.get("type") == "text" and c.get("text"):
@@ -115,7 +119,7 @@ def parse_stream(stdout):
         elif ev.get("type") == "result" and ev.get("result"):
             texts.append(ev["result"])
     final = texts[-1] if texts else ""
-    return {"tools": tools, "final": final, "all_text": "\n".join(texts), "skills": skills, "results": results}
+    return {"tools": tools, "final": final, "all_text": "\n".join(texts), "skills": skills, "results": results, "results_by_id": results_by_id}
 
 
 def grade(g, parsed, cwd, llm_ok, model):
@@ -163,8 +167,11 @@ def grade(g, parsed, cwd, llm_ok, model):
         calls = []
         for i, c in enumerate(parsed["tools"]):
             entry = {"name": c["name"], "input": json.dumps(c["input"])[:600]}
-            if i < len(parsed["results"]):
-                entry["result"] = parsed["results"][i]
+            res = parsed["results_by_id"].get(c.get("id")) if c.get("id") else None
+            if res is None and i < len(parsed["results"]):
+                res = parsed["results"][i]
+            if res is not None:
+                entry["result"] = res
             calls.append(entry)
         transcript = json.dumps({"tool_calls_with_results": calls[-60:],
                                  "assistant_text": parsed["all_text"][-12000:]}, indent=1)[-60000:]
@@ -223,7 +230,9 @@ def main():
                     continue
                 reset = c["fm"].get("reset_script")
                 if reset:
-                    subprocess.run(["bash", "-c", reset], cwd=cwd, capture_output=True)
+                    rr = subprocess.run(["bash", "-c", reset], cwd=cwd, capture_output=True, text=True, env={**os.environ, "DRUPAL_SP_ROOT": ROOT})
+                    if rr.returncode != 0:
+                        print(f"[WARN] {label}: reset_script exited {rr.returncode}: {rr.stderr[-300:]}", flush=True)
             else:
                 cwd = os.path.join(tmp, "project")
                 if fixture:
@@ -237,10 +246,15 @@ def main():
             # premature tool use before the first Skill call (trigger cases only)
             premature = []
             if c["group"] == "trigger":
+                expected = None
+                for g in c["graders"]:
+                    if g.get("type") == "tool_used" and g.get("tool") == "Skill" and g.get("min"):
+                        expected = re.compile(g.get("input_match", ".*"))
                 for call in parsed["tools"]:
-                    if call["name"] == "Skill":
+                    if call["name"] == "Skill" and (expected is None or expected.search(json.dumps(call["input"]))):
                         break
-                    premature.append(call["name"])
+                    if call["name"] != "Skill":
+                        premature.append(call["name"])
             gres = []
             run_ok = True
             for g in c["graders"]:
@@ -264,7 +278,7 @@ def main():
             if not a.keep_temp:
                 shutil.rmtree(tmp, ignore_errors=True)
             if project_env and c["fm"].get("reset_script"):
-                subprocess.run(["bash", "-c", c["fm"]["reset_script"]], cwd=cwd, capture_output=True)
+                subprocess.run(["bash", "-c", c["fm"]["reset_script"]], cwd=cwd, capture_output=True, env={**os.environ, "DRUPAL_SP_ROOT": ROOT})
         results.append(case_res)
     if a.dry_run:
         return 0

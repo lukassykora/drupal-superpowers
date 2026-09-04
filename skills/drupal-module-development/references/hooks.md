@@ -6,7 +6,7 @@
 | ≤ 11.0 | procedural functions in `<module>.module` |
 | ≥ 11.1 and the module (or project convention) uses `src/Hook/` | `#[Hook]` methods in `src/Hook/<Module>Hooks.php`, autowired service |
 | ≥ 11.1, module has only procedural hooks | keep procedural unless the task is the conversion; never convert unrequested |
-| any version | `hook_install`, `hook_update_N`, `hook_post_update_*`, `hook_requirements`, `hook_theme`, `hook_hook_info`, `hook_module_implements_alter` stay procedural (theme hooks became OOP-capable for *themes* in 11.3; check `drupal-facts`) |
+| any version | `hook_install`, `hook_schema`, `hook_update_N`, `hook_post_update_*`, `hook_hook_info`, `hook_module_implements_alter` stay procedural. `hook_theme` may be `#[Hook('theme')]` on 11.1+. `hook_requirements`: procedural on ≤ 11.1; from 11.2 use `#[Hook('runtime_requirements')]` / `#[Hook('update_requirements')]`, and a procedural one needs `#[LegacyRequirementsHook]` on 11.3+ (themes: OOP hooks from 11.3; check `drupal-facts`) |
 
 ## Procedural
 
@@ -56,7 +56,7 @@ final class SavedItemsHooks {
 | Add base fields to an existing type | `hook_entity_base_field_info` (+ update hook for existing sites) |
 | Change routes | `RouteSubscriber` (not a hook) |
 | Change render output | `hook_preprocess_HOOK`, `hook_ENTITY_TYPE_view`, `hook_entity_view_alter` |
-| Change queries | `hook_query_TAG_alter`, `hook_entity_query_alter`? (check version) |
+| Change queries | `hook_query_TAG_alter` (SQL), `hook_entity_query_alter` / `hook_entity_query_ENTITY_TYPE_alter` (entity queries, 10.x+) |
 | Cron | `hook_cron` |
 
 ## Verification

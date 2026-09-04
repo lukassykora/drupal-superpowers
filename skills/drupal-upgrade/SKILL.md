@@ -3,6 +3,8 @@ name: drupal-upgrade
 description: Use when upgrading Drupal core major or minor versions, removing deprecated Drupal APIs, handling Drupal Rector or Upgrade Status output, PHP or Symfony compatibility for Drupal, or bumping a contrib module's major version; not for content updates or routine composer update.
 user-invocable: true
 argument-hint: "[module or target version]"
+model: opus
+effort: high
 ---
 
 # Drupal upgrade
@@ -11,7 +13,7 @@ argument-hint: "[module or target version]"
 
 ## When to use
 
-Core major/minor upgrades (9→10, 10→11, 11→12, 10.x→11.x minors with deprecations), custom module modernization, contrib major bumps, PHP/Symfony compatibility. For Drupal 7 sites this is a migration (`drupal-migrate-api`, Phase 2) plus the `drupal-legacy-archaeologist` agent: do not rewrite D7 code as modern Drupal inside this skill.
+Core major/minor upgrades (9→10, 10→11, 11→12, 10.x→11.x minors with deprecations), custom module modernization, contrib major bumps, PHP/Symfony compatibility. For Drupal 7 sites this is a migration (`drupal-migrate-api`) plus the `drupal-legacy-archaeologist` agent: do not rewrite D7 code as modern Drupal inside this skill.
 
 ## Procedure ([references/workflow.md](references/workflow.md) has the full sequence)
 
