@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# CI validation for the plugin itself (docs/architecture.md §10.4).
+#   scripts/validate [--staleness] [--no-claude]
+# Checks: plugin structure (claude plugin validate --strict), SKILL.md frontmatter rules, agent frontmatter,
+# hooks.json shape + scripts executable, internal links, bash syntax, fixtures PHP syntax, optional staleness.
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd); cd "$ROOT"
+. "$ROOT/scripts/lib/common.sh"
+STALE=0; NOCLAUDE=0
+for a in "$@"; do case "$a" in --staleness) STALE=1;; --no-claude) NOCLAUDE=1;; esac; done
+fail=0; warn=0
+err() { echo "ERROR: $*"; fail=$((fail+1)); }
+wrn() { echo "warn:  $*"; warn=$((warn+1)); }
+
+echo "== plugin structure"
+[ -f .claude-plugin/plugin.json ] || err "missing .claude-plugin/plugin.json"
+if [ $NOCLAUDE -eq 0 ] && dsp_have claude; then
+  if out=$(claude plugin validate --strict . 2>&1); then echo "claude plugin validate --strict: ok"; else err "claude plugin validate --strict failed:"; echo "$out" | head -20; fi
+else echo "(claude CLI not run)"; fi
+
+echo "== skills"
+for s in skills/*/SKILL.md; do
+  [ -f "$s" ] || continue
+  dir=$(basename "$(dirname "$s")")
+  name=$(sed -n '1,/^---$/p' "$s" | sed -n 's/^name: *//p' | head -1)
+  desc=$(sed -n '2,/^---$/p' "$s" | sed -n 's/^description: *//p' | head -1)
+  [ -n "$name" ] || err "$s: no name"
+  [ "$name" = "$dir" ] || err "$s: name '$name' != directory '$dir'"
+  [ -n "$desc" ] || err "$s: no description"
+  case "$desc" in "Use when"*) ;; *) err "$s: description must start with 'Use when'";; esac
+  [ ${#desc} -le 400 ] || err "$s: description ${#desc} chars > 400"
+  printf '%s' "$desc" | grep -Eqi '\b(then|dispatch|first,|step [0-9]|MUST)\b' && wrn "$s: description contains workflow/imperative words"
+  lines=$(wc -l < "$s" | tr -d ' '); [ "$lines" -le 220 ] || wrn "$s: $lines lines (> 220)"
+  words=$(wc -w < "$s" | tr -d ' '); [ "$words" -le 1200 ] || wrn "$s: $words words (> 1200)"
+  # internal links
+  grep -o '](\([^)#]*\))' "$s" | sed 's/](\(.*\))/\1/' | grep -v '^https\?://' | while read -r l; do
+    [ -e "$(dirname "$s")/$l" ] || [ -e "$ROOT/$l" ] || echo "ERROR: $s: broken link $l"
+  done | tee /tmp/dsp_links.$$; grep -q ERROR /tmp/dsp_links.$$ 2>/dev/null && fail=$((fail+1)); rm -f /tmp/dsp_links.$$
+done
+n=$(ls skills/*/SKILL.md 2>/dev/null | wc -l | tr -d ' '); echo "$n skills checked"
+
+echo "== agents"
+for a in agents/*.md; do
+  [ -f "$a" ] || continue
+  name=$(sed -n '1,/^---$/p' "$a" | sed -n 's/^name: *//p' | head -1)
+  desc=$(sed -n '2,/^---$/p' "$a" | sed -n 's/^description: *//p' | head -1)
+  [ -n "$name" ] && [ -n "$desc" ] || err "$a: name/description missing"
+  [ "$name" = "$(basename "$a" .md)" ] || err "$a: name != filename"
+done
+
+echo "== hooks"
+if [ -f hooks/hooks.json ]; then
+  dsp_json get hooks/hooks.json hooks >/dev/null || err "hooks.json unreadable"
+  for h in hooks/scripts/*; do [ -x "$h" ] || err "$h not executable"; bash -n "$h" || err "$h syntax"; done
+fi
+
+echo "== scripts"
+for s in scripts/drupal-* scripts/validate scripts/lib/common.sh hooks/scripts/*; do [ -f "$s" ] && { bash -n "$s" || err "$s: bash syntax"; }; done
+dsp_have shellcheck && shellcheck -S warning scripts/drupal-* hooks/scripts/* 2>&1 | head -20
+python3 -m py_compile scripts/run-evals 2>/dev/null || err "run-evals does not compile"
+
+echo "== fixtures"
+if dsp_have php; then
+  find fixtures -type f \( -name '*.php' -o -name '*.module' -o -name '*.install' \) -print0 | xargs -0 -n1 php -l 2>&1 | grep -v 'No syntax errors' | grep . && err "fixture PHP syntax errors" || echo "fixture PHP ok"
+fi
+python3 -m py_compile fixtures/mcp-stub/server.py || err "mcp stub does not compile"
+
+echo "== evals"
+for p in evals/*/*/prompt.md; do
+  fx=$(sed -n 's/^fixture: *//p' "$p" | head -1); [ -z "$fx" ] || [ -d "fixtures/$fx" ] || err "$p: fixture $fx missing"
+  ls "$(dirname "$p")"/graders/*.md >/dev/null 2>&1 || err "$p: no graders"
+done
+echo "$(ls evals/*/*/prompt.md | wc -l | tr -d ' ') eval cases checked"
+
+if [ $STALE -eq 1 ]; then echo "== staleness"; scripts/drupal-facts staleness || err "stale references"; fi
+
+echo; echo "errors: $fail, warnings: $warn"
+[ $fail -eq 0 ]

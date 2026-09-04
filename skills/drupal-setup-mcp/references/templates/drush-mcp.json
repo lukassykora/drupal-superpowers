@@ -1,0 +1,9 @@
+{
+  "_comment": "drush-mcp (@bloomidea/drush-mcp): Node sidecar that shells out to Drush; no Drupal module required. NO read-only mode: drupal_drush, drupal_php_eval, drupal_sql_query are shell-equivalent. Use only for LOCAL/DISPOSABLE sites. DRUSH_CMD examples: 'ddev drush', 'lando drush', 'vendor/bin/drush'.",
+  "mcpServers": {
+    "drupal-drush": {
+      "command": "npx",
+      "args": ["-y", "@bloomidea/drush-mcp", "--local", "--command", "${DRUSH_CMD:-vendor/bin/drush}"]
+    }
+  }
+}

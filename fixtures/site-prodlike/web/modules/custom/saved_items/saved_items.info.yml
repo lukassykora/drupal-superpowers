@@ -1,0 +1,8 @@
+name: Saved items
+type: module
+description: Lets users keep a private list of saved nodes.
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:node
+  - drupal:user

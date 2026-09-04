@@ -1,0 +1,5 @@
+name: Contact note
+type: module
+description: Simple form that stores a short note for the site owner.
+package: Custom
+core_version_requirement: ^11

@@ -1,0 +1,7 @@
+contact_note.form:
+  path: '/contact-note'
+  defaults:
+    _form: 'Drupal\contact_note\Form\NoteForm'
+    _title: 'Leave a note'
+  requirements:
+    _permission: 'access content'

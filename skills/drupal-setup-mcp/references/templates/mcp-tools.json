@@ -1,0 +1,23 @@
+{
+  "_comment": "MCP Tools (drupal/mcp_tools) over STDIO, read scope. Requires: composer require drupal/mcp_tools && drush pm:enable mcp_tools mcp_tools_stdio. Export DRUPAL_MCP_UID (1 only for throwaway local sites; otherwise a dedicated read-only user id).",
+  "mcpServers": {
+    "drupal": {
+      "command": "vendor/bin/drush",
+      "args": ["mcp-tools:serve", "--server=development", "--uid=${DRUPAL_MCP_UID:-1}", "--quiet"],
+      "env": { "MCP_SCOPE": "${DRUPAL_MCP_SCOPE:-read}" }
+    }
+  },
+  "_ddev_variant": {
+    "drupal": {
+      "command": "ddev",
+      "args": ["drush", "mcp-tools:serve", "--server=development", "--uid=${DRUPAL_MCP_UID:-1}", "--quiet"]
+    }
+  },
+  "_http_variant_trusted_network_only": {
+    "drupal": {
+      "type": "http",
+      "url": "${DRUPAL_MCP_URL}/_mcp_tools",
+      "headers": { "Authorization": "Bearer ${DRUPAL_MCP_API_KEY}" }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+name: XSS notes
+type: module
+description: Shows a note attached to a node (fixture with planted defects).
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:node

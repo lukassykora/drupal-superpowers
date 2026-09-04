@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""Eval runner for drupal-superpowers (docs/evals.md §4). Stdlib only; needs the `claude` CLI.
+
+  scripts/run-evals [--group G]... [--case NAME]... [--tag T]... [--runs N] [--no-llm] [--baseline]
+                    [--plugin-dir DIR] [--with-user-settings] [--model M] [--json OUT] [--dry-run]
+
+Each case: evals/<group>/<name>/prompt.md (+ graders/*.md). The referenced fixture is copied to a temp
+directory; `claude -p` runs there with --output-format stream-json; graders are scored from the stream.
+Exit 1 if any selected case fails in any run. Results land in evals/results/<timestamp>/.
+"""
+import argparse, datetime, glob, json, os, re, shutil, subprocess, sys, tempfile, time
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EVALS = os.path.join(ROOT, "evals")
+FIXTURES = os.path.join(ROOT, "fixtures")
+
+
+def parse_frontmatter(text):
+    m = re.match(r"^---\n(.*?)\n---\n?(.*)$", text, re.S)
+    if not m:
+        return {}, text
+    fm = {}
+    for line in m.group(1).splitlines():
+        if not line.strip() or ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        k, v = k.strip(), v.strip()
+        if v.startswith("[") and v.endswith("]"):
+            try:
+                fm[k] = json.loads(v)
+            except json.JSONDecodeError:
+                fm[k] = [x.strip().strip('"') for x in v[1:-1].split(",") if x.strip()]
+        else:
+            try:
+                fm[k] = json.loads(v)
+            except json.JSONDecodeError:
+                fm[k] = v
+    return fm, m.group(2)
+
+
+def load_cases(groups, names, tags):
+    cases = []
+    for pm in sorted(glob.glob(os.path.join(EVALS, "*", "*", "prompt.md"))):
+        d = os.path.dirname(pm)
+        group = os.path.basename(os.path.dirname(d))
+        name = os.path.basename(d)
+        if groups and group not in groups:
+            continue
+        if names and name not in names and f"{group}/{name}" not in names:
+            continue
+        fm, body = parse_frontmatter(open(pm).read())
+        body = re.sub(r"<!--.*?-->", "", body, flags=re.S).strip()
+        if tags and not set(tags) & set(fm.get("tags", [])):
+            continue
+        graders = []
+        for gf in sorted(glob.glob(os.path.join(d, "graders", "*.md"))):
+            gfm, gbody = parse_frontmatter(open(gf).read())
+            gfm["_name"] = os.path.splitext(os.path.basename(gf))[0]
+            gfm["_criteria"] = gbody.strip()
+            graders.append(gfm)
+        cases.append({"group": group, "name": name, "dir": d, "fm": fm, "prompt": body, "graders": graders})
+    return cases
+
+
+def run_claude(prompt, cwd, plugin_dir, max_turns, timeout, model, with_user_settings, env_extra):
+    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose",
+           "--max-turns", str(max_turns), "--dangerously-skip-permissions", "--no-session-persistence"]
+    if plugin_dir:
+        cmd += ["--plugin-dir", plugin_dir]
+    if not with_user_settings:
+        cmd += ["--setting-sources", "project"]
+    if model:
+        cmd += ["--model", model]
+    mcp_cfg = os.path.join(cwd, ".mcp.json")
+    cmd += ["--strict-mcp-config"] + (["--mcp-config", mcp_cfg] if os.path.isfile(mcp_cfg) else [])
+    env = dict(os.environ)
+    env.update(env_extra)
+    env.pop("CLAUDECODE", None)  # allow nesting inside an interactive session
+    t0 = time.time()
+    try:
+        p = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+        out, err, rc, timed_out = p.stdout, p.stderr, p.returncode, False
+    except subprocess.TimeoutExpired as e:
+        out = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
+        err = e.stderr.decode() if isinstance(e.stderr, bytes) else (e.stderr or "")
+        rc, timed_out = -1, True
+    return {"stdout": out, "stderr": err, "rc": rc, "timed_out": timed_out, "seconds": round(time.time() - t0, 1), "cmd": cmd}
+
+
+def parse_stream(stdout):
+    tools, texts, skills = [], [], []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") == "assistant":
+            for c in (ev.get("message") or {}).get("content") or []:
+                if c.get("type") == "tool_use":
+                    tools.append({"name": c.get("name"), "input": c.get("input") or {}})
+                    if c.get("name") == "Skill":
+                        skills.append((c.get("input") or {}).get("skill"))
+                elif c.get("type") == "text" and c.get("text"):
+                    texts.append(c["text"])
+        elif ev.get("type") == "result" and ev.get("result"):
+            texts.append(ev["result"])
+    final = texts[-1] if texts else ""
+    return {"tools": tools, "final": final, "all_text": "\n".join(texts), "skills": skills}
+
+
+def grade(g, parsed, cwd, llm_ok, model):
+    t = g.get("type")
+    if t == "tool_used":
+        tre = re.compile(g.get("tool", ".*"))
+        ire = re.compile(g["input_match"], re.S) if g.get("input_match") else None
+        n = 0
+        for call in parsed["tools"]:
+            if not tre.fullmatch(call["name"] or ""):
+                continue
+            if ire and not ire.search(json.dumps(call["input"])):
+                continue
+            n += 1
+        lo, hi = g.get("min"), g.get("max")
+        ok = (lo is None or n >= lo) and (hi is None or n <= hi)
+        return ok, f"{n} matching call(s) (min={lo}, max={hi})"
+    if t == "regex":
+        flags = re.I if "i" in (g.get("flags") or "") else 0
+        hay = parsed["all_text"] if g.get("scope") == "all" else parsed["final"]
+        found = re.search(g["pattern"], hay, flags | re.S) is not None
+        want = g.get("match", "contains") == "contains"
+        return found == want, f"pattern {'found' if found else 'not found'} in {'transcript' if g.get('scope') == 'all' else 'final message'} (want {'present' if want else 'absent'})"
+    if t == "file_exists":
+        hits = glob.glob(os.path.join(cwd, g["path"]), recursive=True)
+        return bool(hits), f"{len(hits)} file(s) match {g['path']}"
+    if t == "file_contains":
+        hits = glob.glob(os.path.join(cwd, g["path"]), recursive=True)
+        if not hits:
+            return g.get("match", "contains") != "contains", f"no file matches {g['path']}"
+        text = "\n".join(open(h, errors="replace").read() for h in hits)
+        found = re.search(g["pattern"], text, re.S) is not None
+        want = g.get("match", "contains") == "contains"
+        return found == want, f"pattern {'found' if found else 'not found'} in {len(hits)} file(s) (want {'present' if want else 'absent'})"
+    if t == "tool_order":
+        names = [c["name"] for c in parsed["tools"]]
+        try:
+            return names.index(g["before"]) < names.index(g["after"]), "order ok"
+        except ValueError:
+            return False, "one of the tools was never used"
+    if t == "llm":
+        if not llm_ok:
+            return None, "skipped (--no-llm)"
+        transcript = json.dumps({"tool_calls": [{"name": c["name"], "input": json.dumps(c["input"])[:600]} for c in parsed["tools"]],
+                                 "assistant_text": parsed["all_text"][-12000:]}, indent=1)
+        judge_prompt = ("You are grading an AI coding agent's transcript against strict criteria. Answer with exactly one line: "
+                        "PASS or FAIL, then a colon and one sentence of reason. Do not be lenient: every clause of the criteria must hold.\n\n"
+                        f"CRITERIA:\n{g['_criteria']}\n\nTRANSCRIPT (tool calls, then assistant text):\n{transcript}")
+        r = run_claude(judge_prompt, cwd=ROOT, plugin_dir=None, max_turns=1, timeout=180, model=model or "sonnet",
+                       with_user_settings=False, env_extra={})
+        verdict = parse_stream(r["stdout"])["final"].strip()
+        ok = verdict.upper().startswith("PASS")
+        return ok, verdict[:300] or f"no verdict (rc={r['rc']})"
+    return None, f"unknown grader type {t}"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--group", action="append", default=[])
+    ap.add_argument("--case", action="append", default=[])
+    ap.add_argument("--tag", action="append", default=[])
+    ap.add_argument("--runs", type=int)
+    ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--baseline", action="store_true", help="run without the plugin")
+    ap.add_argument("--plugin-dir", default=ROOT)
+    ap.add_argument("--with-user-settings", action="store_true", help="also load user settings (e.g. Superpowers)")
+    ap.add_argument("--model")
+    ap.add_argument("--json")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--keep-temp", action="store_true")
+    a = ap.parse_args()
+
+    cases = load_cases(a.group, a.case, a.tag)
+    if not cases:
+        print("no cases selected"); return 1
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    outdir = os.path.join(EVALS, "results", stamp + ("-baseline" if a.baseline else ""))
+    os.makedirs(outdir, exist_ok=True)
+    results = []
+    any_fail = False
+    for c in cases:
+        runs = a.runs or int(c["fm"].get("runs", 2))
+        label = f"{c['group']}/{c['name']}"
+        if a.dry_run:
+            print(f"{label}: fixture={c['fm'].get('fixture')} runs={runs} graders={[g['_name'] for g in c['graders']]}")
+            continue
+        case_res = {"case": label, "runs": []}
+        for i in range(runs):
+            tmp = tempfile.mkdtemp(prefix="dsp-eval-")
+            fixture = c["fm"].get("fixture")
+            cwd = os.path.join(tmp, "project")
+            if fixture:
+                shutil.copytree(os.path.join(FIXTURES, fixture), cwd)
+            else:
+                os.makedirs(cwd)
+            r = run_claude(c["prompt"], cwd, None if a.baseline else a.plugin_dir, int(c["fm"].get("max_turns", 10)),
+                           int(c["fm"].get("timeout_seconds", 300)), a.model, a.with_user_settings,
+                           {"DRUPAL_SP_FIXTURES": FIXTURES})
+            parsed = parse_stream(r["stdout"])
+            # premature tool use before the first Skill call (trigger cases only)
+            premature = []
+            if c["group"] == "trigger":
+                for call in parsed["tools"]:
+                    if call["name"] == "Skill":
+                        break
+                    premature.append(call["name"])
+            gres = []
+            run_ok = True
+            for g in c["graders"]:
+                ok, why = grade(g, parsed, cwd, not a.no_llm, a.model)
+                gres.append({"grader": g["_name"], "type": g.get("type"), "ok": ok, "why": why})
+                if ok is False:
+                    run_ok = False
+            if r["timed_out"]:
+                run_ok = False
+            any_fail |= not run_ok
+            case_res["runs"].append({"ok": run_ok, "seconds": r["seconds"], "rc": r["rc"], "timed_out": r["timed_out"],
+                                     "skills": parsed["skills"], "tools": [t["name"] for t in parsed["tools"]],
+                                     "premature_tools": premature, "graders": gres, "final": parsed["final"][-2000:],
+                                     "stderr": r["stderr"][-1500:]})
+            with open(os.path.join(outdir, f"{c['group']}__{c['name']}__run{i+1}.stream.jsonl"), "w") as f:
+                f.write(r["stdout"])
+            status = "PASS" if run_ok else "FAIL"
+            print(f"[{status}] {label} run {i+1}/{runs} {r['seconds']}s skills={parsed['skills']} "
+                  + " ".join(f"{g['grader']}={'ok' if g['ok'] else ('skip' if g['ok'] is None else 'FAIL')}" for g in gres)
+                  + (f" premature={premature}" if premature else ""), flush=True)
+            if not a.keep_temp:
+                shutil.rmtree(tmp, ignore_errors=True)
+        results.append(case_res)
+    if a.dry_run:
+        return 0
+    summary = {"timestamp": stamp, "baseline": a.baseline, "with_user_settings": a.with_user_settings, "model": a.model, "results": results}
+    with open(os.path.join(outdir, "results.json"), "w") as f:
+        json.dump(summary, f, indent=1)
+    if a.json:
+        with open(a.json, "w") as f:
+            json.dump(summary, f, indent=1)
+    lines = ["| case | runs | pass | skills fired | failed graders |", "|---|---|---|---|---|"]
+    for cr in results:
+        passed = sum(1 for r in cr["runs"] if r["ok"])
+        failed = sorted({g["grader"] for r in cr["runs"] for g in r["graders"] if g["ok"] is False})
+        sk = sorted({s for r in cr["runs"] for s in r["skills"] if s})
+        lines.append(f"| {cr['case']} | {len(cr['runs'])} | {passed} | {', '.join(sk) or '—'} | {', '.join(failed) or '—'} |")
+    md = "\n".join(lines)
+    with open(os.path.join(outdir, "summary.md"), "w") as f:
+        f.write(md + "\n")
+    print("\n" + md)
+    print(f"\nresults: {outdir}")
+    return 1 if any_fail else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

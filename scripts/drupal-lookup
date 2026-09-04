@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# drupal-lookup: ranked evidence for a Drupal symbol, service, hook, or pattern
+# (docs/architecture.md §5.4; spec §12–13 source-of-truth hierarchy).
+#
+#   drupal-lookup <symbol|words> [--kind function|class|hook|service|pattern|any]
+#                 [--branch 11.x] [--dir <project dir>] [--offline] [--max 20]
+#
+# Backends, in authority order, each optional and reported as "unavailable" when it cannot answer:
+#   1. installed core source under the project's docroot (grep)      authority: highest
+#   2. Drupal Code Query API (api.tresbien.tech, third-party, no auth) symbol lifecycle + code search
+#   3. drupal.org change records (api-d7 REST, exact title match + branch listing)
+#   4. canonical documentation URL patterns (api.drupal.org, coding standards)
+# Never uses a blog post as evidence.
+set -u
+. "$(dirname "$0")/lib/common.sh"
+
+Q=""; KIND="any"; BRANCH=""; DIR="."; OFFLINE=0; MAX=20
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --kind) KIND=$2; shift;; --branch) BRANCH=$2; shift;; --dir) DIR=$2; shift;; --offline) OFFLINE=1;; --max) MAX=$2; shift;;
+    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+    *) Q="${Q:+$Q }$1";;
+  esac; shift
+done
+[ -n "$Q" ] || { echo "usage: drupal-lookup <symbol|words> [--kind ...] [--branch 11.x] [--dir <project>]"; exit 1; }
+
+read -r ROOT RKIND <<<"$(dsp_find_root "$DIR")"
+DOCROOT=$(dsp_find_docroot "$ROOT"); CORE="$ROOT/$DOCROOT/core"; [ "$DOCROOT" = "." ] && CORE="$ROOT/core"
+VERSION=""; [ -f "$ROOT/composer.lock" ] && VERSION=$(dsp_json lockversions "$ROOT/composer.lock" | awk '$1=="drupal/core"{print $2}')
+[ -z "$VERSION" ] && [ -f "$CORE/lib/Drupal.php" ] && VERSION=$(grep -o "const VERSION = '[^']*'" "$CORE/lib/Drupal.php" | sed "s/.*'\([^']*\)'/\1/")
+[ -z "$BRANCH" ] && [ -n "$VERSION" ] && BRANCH="$(echo "$VERSION" | cut -d. -f1).x"
+[ -z "$BRANCH" ] && BRANCH="11.x"
+
+sym=$(printf '%s' "$Q" | sed 's/[()]//g; s/^\\//; s/^Drupal\\\\//')
+short=${sym##*\\}; short=${short##*::}
+
+echo "query: $Q  (kind: $KIND, branch: $BRANCH, project: ${VERSION:-unknown version} at $ROOT)"
+echo
+
+# ---- 1. installed core
+echo "## 1. Installed core source (authority: highest)"
+if [ -d "$CORE/lib" ]; then
+  case "$KIND" in
+    service)
+      grep -rn --include='*.services.yml' -E "^  ${short}:" "$CORE" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||" || true
+      grep -rln --include='*.services.yml' -E "^  ${short}:" "$CORE" 2>/dev/null | head -1 | xargs -I{} sh -c "awk '/^  ${short}:/{f=1} f&&/^  [a-z_.]+:/&&!/^  ${short}:/{exit} f' '{}' | head -12" 2>/dev/null || true
+      ;;
+    hook)
+      grep -rn --include='*.api.php' -E "function (hook_)?${short#hook_}\(" "$CORE" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||" || true
+      ;;
+    pattern)
+      echo "(see ## 4 pattern index)";;
+    *)
+      grep -rn --include='*.php' --include='*.module' --include='*.inc' -E "(function|class|interface|trait|const) +${short}\b" "$CORE/lib" "$CORE/modules" "$CORE/includes" 2>/dev/null | head -n "$MAX" | sed "s|$ROOT/||" || true
+      dep=$(grep -rn --include='*.php' --include='*.inc' -B8 -E "(function|class) +${short}\b" "$CORE/lib" "$CORE/modules" "$CORE/includes" 2>/dev/null | grep -E '@deprecated|trigger_error|E_USER_DEPRECATED' | head -3 | sed "s|$ROOT/||")
+      [ -n "$dep" ] && { echo "DEPRECATION NOTICE FOUND:"; echo "$dep"; }
+      ;;
+  esac
+  echo "(core at $CORE, version ${VERSION:-?})"
+else
+  echo "unavailable: no core/ under $ROOT/$DOCROOT (fixture or uninstalled project). Verify against a real checkout or the backends below; say NOT VERIFIED if none answer."
+fi
+echo
+
+# ---- 2. Drupal Code Query
+echo "## 2. Drupal Code Query (api.tresbien.tech; third-party static analysis of core + contrib)"
+if [ $OFFLINE -eq 1 ] || ! dsp_have curl; then echo "unavailable: offline or no curl"
+else
+  r=$(curl -s --max-time 12 "https://api.tresbien.tech/v1/symbol/search?q=$(printf '%s' "$short" | sed 's/ /%20/g')" 2>/dev/null || true)
+  if [ -z "$r" ] || printf '%s' "$r" | grep -qi 'error\|rate limit'; then echo "unavailable: no answer or rate-limited (${r:0:80})"
+  else
+    tmp=$(mktemp); printf '%s' "$r" > "$tmp"
+    n=$(grep -o '"identity_id"' "$tmp" | wc -l | tr -d ' ')
+    if [ "$n" = "0" ]; then echo "no symbol match for '$short' (does not exist in core, or spelled differently)"
+    else
+      i=0; while [ $i -lt "$n" ] && [ $i -lt 5 ]; do
+        echo "- $(dsp_json get "$tmp" "$i.fqn" 2>/dev/null || dsp_json get "$tmp" "results.$i.fqn") [$(dsp_json get "$tmp" "$i.kind" 2>/dev/null || dsp_json get "$tmp" "results.$i.kind")] id=$(dsp_json get "$tmp" "$i.identity_id" 2>/dev/null || dsp_json get "$tmp" "results.$i.identity_id")"
+        i=$((i+1))
+      done
+      echo "lifecycle: GET https://api.tresbien.tech/v1/symbol/<id>  (added / deprecated / removed stamps)"
+    fi
+    rm -f "$tmp"
+  fi
+fi
+echo
+
+# ---- 3. change records
+echo "## 3. drupal.org change records (api-d7; exact-title match, then branch listing)"
+if [ $OFFLINE -eq 1 ] || ! dsp_have curl; then echo "unavailable: offline or no curl"
+else
+  r=$(curl -s --max-time 12 "https://www.drupal.org/api-d7/node.json?type=changenotice&field_project=3060&field_change_to_branch=${BRANCH}&limit=50" 2>/dev/null || true)
+  if [ -z "$r" ]; then echo "unavailable: no answer"
+  else
+    tmp=$(mktemp); printf '%s' "$r" > "$tmp"
+    hits=$(grep -o '"title":"[^"]*"' "$tmp" | grep -i -- "$short" | head -5 | sed 's/"title":"//; s/"$//')
+    if [ -n "$hits" ]; then echo "$hits" | sed 's/^/- /'; else echo "no change-record title on branch $BRANCH mentions '$short' in the first 50; browse https://www.drupal.org/list-changes/drupal?keywords_description=$(printf '%s' "$short" | sed 's/ /+/g')&to_branch=$BRANCH"; fi
+    rm -f "$tmp"
+  fi
+fi
+echo
+
+# ---- 4. docs + pattern index
+echo "## 4. Canonical documentation"
+enc=$(printf '%s' "$short" | sed 's/\\/%21/g')
+echo "- api.drupal.org search: https://api.drupal.org/api/drupal/${BRANCH}/search/${enc}"
+echo "- coding standards: https://project.pages.drupalcode.org/coding_standards/"
+[ "$KIND" = "pattern" ] || [ "$KIND" = "any" ] && {
+  idx="$DSP_ROOT/references/patterns/index.md"
+  if [ -f "$idx" ]; then
+    m=$(grep -i -- "$Q" "$idx" | head -5)
+    [ -n "$m" ] && { echo "- pattern index (references/patterns/index.md):"; echo "$m" | sed 's/^/    /'; }
+  fi
+}
+echo
+echo "Ranking rule: installed core beats every other source; a change record beats a doc page; nothing here beats reading the actual code path in this project."

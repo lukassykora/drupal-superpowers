@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SessionStart hook: inject a short Drupal project brief plus the skill routing table, only when the
+# cwd is inside a Drupal project. Output: {"hookSpecificOutput":{...,"additionalContext":"..."}} or nothing.
+set -u
+PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$PLUGIN/scripts/lib/common.sh"
+
+input=$(cat 2>/dev/null || true)
+cwd=$(printf '%s' "$input" | sed -n 's/.*"cwd":"\([^"]*\)".*/\1/p' | head -1)
+[ -z "$cwd" ] && cwd=$(pwd)
+
+read -r ROOT KIND <<<"$(dsp_find_root "$cwd")"
+[ "$KIND" = "none" ] && exit 0
+
+profile=$("$PLUGIN/scripts/drupal-profile" "$cwd" --summary 2>/dev/null | head -6)
+runtime=$("$PLUGIN/scripts/drupal-runtime" "$cwd" --quick --summary 2>/dev/null | head -3)
+[ -z "$profile" ] && exit 0
+
+ctx="Drupal project detected (drupal-superpowers).
+$profile
+$runtime
+Facts above come from files, not memory; anything not listed is unknown until checked.
+
+Skill routing: invoke the matching drupal-superpowers skill BEFORE the first investigation or edit; several can apply in sequence. When Superpowers is installed, its process skills (brainstorming, systematic-debugging, writing-plans) run first and these run inside them.
+- version, paths, runtime, or commands unknown → drupal-project-understanding
+- build / change / fix something in this Drupal project (no Superpowers process skill active) → drupal-workflow
+- unsure an API, service, hook, or method exists, or asked to use a named one → drupal-research
+- choosing service vs plugin vs hook, config vs content vs state, core vs contrib vs custom → drupal-architecture
+- creating/editing module files: .info/.services/.routing/.permissions.yml, controllers, forms, plugins, entities, hooks → drupal-module-development
+- choosing or writing PHPUnit/Kernel/Functional tests, or a Drupal test fails → drupal-testing
+- an error, WSOD, ServiceNotFound, plugin/route not found, or wrong behaviour to diagnose → drupal-debugging
+- code touching access, permissions, routes, user data, output/Markup/Twig, queries, uploads, redirects → drupal-security
+- render output that varies by user, permissions, language, or query; stale or another user's data → drupal-cacheability
+- config/install, schema, sync, drift, cex/cim, config vs state → drupal-config
+- picking a contrib module or dependency, or before non-trivial custom code → drupal-contrib-research
+- about to run drush/composer/phpunit/phpcs/phpstan, verify on a site, or use Drupal MCP tools → drupal-runtime-verification
+- reviewing a diff, module, or PR → drupal-code-review
+- about to say done, fixed, working, or passing → drupal-verification
+- core/PHP/Symfony upgrades, deprecations, Rector, contrib major bumps → drupal-upgrade"
+
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' "$(dsp_json quote "$ctx")"

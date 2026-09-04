@@ -1,0 +1,11 @@
+xss_notes.note:
+  path: '/notes/{node}'
+  defaults:
+    _controller: 'Drupal\xss_notes\Controller\NotesController::show'
+    _title: 'Note'
+  requirements:
+    _access: 'TRUE'
+  options:
+    parameters:
+      node:
+        type: entity:node

@@ -1,0 +1,77 @@
+<?php
+
+/**
+ * @file
+ * Partner directory for a Drupal 7 site.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function legacy_d7_menu() {
+  $items['partners'] = array(
+    'title' => 'Partners',
+    'page callback' => 'legacy_d7_partners_page',
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['partners/%'] = array(
+    'title' => 'Partner',
+    'page callback' => 'legacy_d7_partner_page',
+    'page arguments' => array(1),
+    'access callback' => TRUE,
+  );
+  return $items;
+}
+
+/**
+ * Lists partners, most recently updated first.
+ */
+function legacy_d7_partners_page() {
+  $rows = array();
+  $result = db_query("SELECT nid, title FROM {node} WHERE type = 'partner' AND status = 1 ORDER BY changed DESC");
+  foreach ($result as $row) {
+    $rows[] = array(l($row->title, 'partners/' . $row->nid));
+  }
+  return theme('table', array('header' => array(t('Partner')), 'rows' => $rows));
+}
+
+/**
+ * Shows one partner; the tier comes from a legacy CCK-era table.
+ */
+function legacy_d7_partner_page($nid) {
+  $tier = db_query("SELECT tier FROM {legacy_partner_tier} WHERE nid = " . $nid)->fetchField();
+  $node = node_load($nid);
+  if (!$node) {
+    return MENU_NOT_FOUND;
+  }
+  $output = '<h2>' . $node->title . '</h2>';
+  $output .= '<p>' . t('Tier: @tier', array('@tier' => $tier)) . '</p>';
+  // Business rule nobody documented: gold partners get the legacy discount code.
+  if ($tier == 'gold') {
+    $output .= '<p>' . variable_get('legacy_d7_gold_code', 'GOLD-2014') . '</p>';
+  }
+  return $output;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function legacy_d7_cron() {
+  // Recomputes tiers nightly from an external CSV dropped by an FTP job.
+  $file = variable_get('legacy_d7_tier_csv', '/var/imports/tiers.csv');
+  if (file_exists($file)) {
+    legacy_d7_import_tiers($file);
+  }
+}
+
+/**
+ * Imports partner tiers from CSV.
+ */
+function legacy_d7_import_tiers($file) {
+  $handle = fopen($file, 'r');
+  while (($data = fgetcsv($handle)) !== FALSE) {
+    db_merge('legacy_partner_tier')->key(array('nid' => $data[0]))->fields(array('tier' => $data[1]))->execute();
+  }
+  fclose($handle);
+}

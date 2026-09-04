@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# PostToolUse(Edit|Write) hook: cheap syntax check for PHP-family files; targeted phpcs only when a
+# native phpcs resolves quickly. Never phpstan, never phpunit. Emits additionalContext on problems.
+set -u
+PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$PLUGIN/scripts/lib/common.sh"
+
+input=$(cat 2>/dev/null || true)
+[ -z "$input" ] && exit 0
+tmp=$(mktemp); printf '%s' "$input" > "$tmp"
+file=$(dsp_json get "$tmp" tool_input.file_path)
+rm -f "$tmp"
+[ -z "$file" ] && exit 0
+case "$file" in *.php|*.module|*.install|*.theme|*.inc|*.profile|*.engine) ;; *) exit 0;; esac
+[ -f "$file" ] || exit 0
+
+out=""
+if dsp_have php; then
+  lint=$(php -l "$file" 2>&1) || out="php -l: $(printf '%s' "$lint" | grep -v '^Errors parsing' | head -3)"
+fi
+
+read -r ROOT KIND <<<"$(dsp_find_root "$(dirname "$file")")"
+if [ "$KIND" != "none" ] && [ -x "$ROOT/vendor/bin/phpcs" ] && [ -z "$out" ]; then
+  std=""
+  for c in phpcs.xml phpcs.xml.dist .phpcs.xml .phpcs.xml.dist; do [ -f "$ROOT/$c" ] && { std="--standard=$ROOT/$c"; break; }; done
+  [ -z "$std" ] && std="--standard=Drupal,DrupalPractice"
+  res=$( (cd "$ROOT" && vendor/bin/phpcs -q --report=summary $std "$file" 2>/dev/null) | grep -E 'A TOTAL OF' | head -1)
+  [ -n "$res" ] && out="phpcs ($std): $res in $(basename "$file"). Run phpcbf for auto-fixable ones."
+fi
+
+[ -z "$out" ] && exit 0
+printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":%s}}\n' "$(dsp_json quote "drupal-superpowers lint: $out")"

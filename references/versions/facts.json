@@ -1,0 +1,119 @@
+{
+  "_meta": {
+    "description": "Version-gated Drupal facts. Each fact applies when since <= version < until. Every entry cites a change record or core file; scripts/drupal-facts quotes the citation. Keep this list short: only facts that agents get wrong without it.",
+    "last_reviewed": "2026-09-04",
+    "verified_against": "11.4.x"
+  },
+  "facts": [
+    {
+      "id": "oop-hooks",
+      "statement": "Hooks can be implemented as classes in src/Hook/ with the #[Hook] attribute on autowired services.",
+      "since": "11.1.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/node/3442349",
+      "verify_in_core": "core/lib/Drupal/Core/Hook/Attribute/Hook.php",
+      "note": "Use #[LegacyHook] on the procedural shim for 10.x compatibility. Install/update hooks, hook_theme, hook_requirements, hook_hook_info stay procedural."
+    },
+    {
+      "id": "oop-hooks-ordering",
+      "statement": "#[Hook] supports order (Order::First/Last, OrderBefore/After), #[ReorderHook], #[RemoveHook], and preprocess hooks.",
+      "since": "11.2.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/list-changes/drupal?to_branch=11.2.x",
+      "verify_in_core": "core/lib/Drupal/Core/Hook/Attribute/ReorderHook.php",
+      "note": "Secondary-sourced details; confirm the record before quoting specifics."
+    },
+    {
+      "id": "oop-theme-hooks",
+      "statement": "Themes can implement hooks with #[Hook] in their src/Hook/ directory.",
+      "since": "11.3.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/node/3551652",
+      "verify_in_core": "core/lib/Drupal/Core/Theme/ThemeManager.php"
+    },
+    {
+      "id": "procedural-hooks-not-deprecated",
+      "statement": "Procedural hooks in .module files are still supported and not formally deprecated.",
+      "since": "8.0.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/project/drupal/issues/3481555",
+      "verify_in_core": "core/lib/Drupal/Core/Extension/ModuleHandler.php",
+      "note": "Deprecation is planned; removal no earlier than Drupal 13. Do not rewrite procedural hooks unrequested."
+    },
+    {
+      "id": "plugin-attributes",
+      "statement": "Plugin discovery supports PHP attributes (e.g. #[Block], #[FieldType]) for core plugin types.",
+      "since": "10.2.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/node/3395582",
+      "verify_in_core": "core/lib/Drupal/Core/Block/Attribute/Block.php",
+      "note": "Contrib plugin types may still require annotations; check the plugin manager of that type, not the core version."
+    },
+    {
+      "id": "plugin-attribute-class-required",
+      "statement": "Plugin types must provide an attribute class; annotation-only plugin types are deprecated (removal of annotation support in 13.0).",
+      "since": "11.2.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/node/3522776",
+      "verify_in_core": "core/lib/Drupal/Core/Plugin/Discovery/AttributeDiscoveryWithAnnotations.php"
+    },
+    {
+      "id": "recipes",
+      "statement": "Recipes (recipe.yml with config actions) can be applied to a site.",
+      "since": "10.3.0",
+      "until": null,
+      "change_record": "UNVERIFIED nid — see https://www.drupal.org/docs/extending-drupal/drupal-recipes and the 10.3.x change-record list",
+      "verify_in_core": "core/lib/Drupal/Core/Recipe/Recipe.php"
+    },
+    {
+      "id": "entity-query-access-check-required",
+      "statement": "Entity queries must call accessCheck(TRUE|FALSE) explicitly; omitting it throws.",
+      "since": "10.0.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/node/3201242 (deprecation announced 9.2; exception thrown from 10.0)",
+      "verify_in_core": "core/lib/Drupal/Core/Entity/Query/QueryBase.php"
+    },
+    {
+      "id": "format-size-removed",
+      "statement": "format_size() is deprecated (10.2) and removed in 11.0; use \\Drupal\\Core\\StringTranslation\\ByteSizeMarkup::create().",
+      "since": "10.2.0",
+      "until": "11.0.0",
+      "change_record": "https://www.drupal.org/node/2999981",
+      "verify_in_core": "core/lib/Drupal/Core/StringTranslation/ByteSizeMarkup.php",
+      "note": "since/until here mark the deprecation window: in >= 11.0 the function does not exist."
+    },
+    {
+      "id": "watchdog-exception-removed",
+      "statement": "watchdog_exception() is deprecated (10.1) and removed in 11.0; use \\Drupal\\Core\\Utility\\Error::logException() with an injected logger.",
+      "since": "10.1.0",
+      "until": "11.0.0",
+      "change_record": "https://www.drupal.org/node/2932520",
+      "verify_in_core": "core/lib/Drupal/Core/Utility/Error.php"
+    },
+    {
+      "id": "system-time-zones-removed",
+      "statement": "system_time_zones() is deprecated (10.1) and removed in 11.0; use \\Drupal\\Core\\Datetime\\TimeZoneFormHelper.",
+      "since": "10.1.0",
+      "until": "11.0.0",
+      "change_record": "https://www.drupal.org/node/3023528",
+      "verify_in_core": "core/lib/Drupal/Core/Datetime/TimeZoneFormHelper.php"
+    },
+    {
+      "id": "drupal-12-php",
+      "statement": "Drupal 12 requires PHP 8.5 and an upgrade path from 11.4 or later.",
+      "since": "12.0.0",
+      "until": null,
+      "change_record": "https://www.drupal.org/project/drupal/issues/3534144",
+      "verify_in_core": "core/composer.json"
+    },
+    {
+      "id": "run-tests-in-separate-processes",
+      "statement": "Functional tests need #[RunTestsInSeparateProcesses] (or equivalent) from 11.3.",
+      "since": "11.3.0",
+      "until": null,
+      "change_record": "UNVERIFIED — reported by ai_best_practices and secondary sources; confirm the change record before relying on it",
+      "verify_in_core": "core/tests/Drupal/Tests/BrowserTestBase.php",
+      "note": "Marked unverified on 2026-09-04."
+    }
+  ]
+}

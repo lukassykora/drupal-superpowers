@@ -1,0 +1,5 @@
+name = Legacy D7
+description = Partner directory with custom listing pages.
+core = 7.x
+package = Custom
+files[] = legacy_d7.module

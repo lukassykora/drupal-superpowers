@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Stop hook: if Drupal code/config files were edited in this session and the last assistant message
+# carries no verification report, ask once (decision: block) for the report. Exits 0 when stop_hook_active
+# is set, so it can never loop.
+set -u
+PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$PLUGIN/scripts/lib/common.sh"
+
+input=$(cat 2>/dev/null || true)
+[ -z "$input" ] && exit 0
+tmp=$(mktemp); printf '%s' "$input" > "$tmp"
+transcript=$(dsp_json get "$tmp" transcript_path)
+active=$(dsp_json get "$tmp" stop_hook_active)
+rm -f "$tmp"
+[ "$active" = "true" ] && exit 0
+[ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
+
+# Edits to Drupal-shaped files (custom modules/themes, config, .install, services/routing yml).
+edited=$(grep -o '"file_path":"[^"]*"' "$transcript" 2>/dev/null | grep -E 'modules/custom|themes/custom|/config/|\.(module|install|theme|services\.yml|routing\.yml|permissions\.yml|php)"' | sort -u | wc -l | tr -d ' ')
+# Edits performed through Bash (sed -i, redirects, tee, heredocs) on Drupal-shaped paths.
+bashed=$(grep -oE '"command":"([^"\\]|\\.)*"' "$transcript" 2>/dev/null | grep -E '(sed -i|>>?|tee |cat >|python3? -|php -r)' | grep -E 'modules/custom|themes/custom|/config/|\.(module|install|theme|yml|php)' | wc -l | tr -d ' ')
+edited=$(( ${edited:-0} + ${bashed:-0} ))
+[ "${edited:-0}" -eq 0 ] && exit 0
+
+# Look for a verification report in the last assistant text.
+last=$(grep '"role":"assistant"' "$transcript" | tail -3)
+if printf '%s' "$last" | grep -Eq 'NOT VERIFIED|NOT APPLICABLE|VERIFY L[123]|Verified:|Not verified:'; then exit 0; fi
+
+ctx="drupal-superpowers: $edited Drupal file(s) were edited in this session but the reply has no verification report. Use the drupal-verification skill (drupal-superpowers:drupal-verification) and end with a short report: what was verified (coding standards, static analysis, tests, runtime) and what is NOT VERIFIED with the reason. Keep the rest of your reply as it was."
+printf '{"decision":"block","reason":%s}\n' "$(dsp_json quote "$ctx")"
+exit 0

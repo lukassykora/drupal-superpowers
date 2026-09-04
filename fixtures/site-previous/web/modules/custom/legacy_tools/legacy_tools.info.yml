@@ -1,0 +1,5 @@
+name: Legacy tools
+type: module
+description: Assorted helpers written against Drupal 10.0 APIs.
+package: Custom
+core_version_requirement: ^10

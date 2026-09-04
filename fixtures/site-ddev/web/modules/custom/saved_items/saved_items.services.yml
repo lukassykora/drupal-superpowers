@@ -1,0 +1,4 @@
+services:
+  saved_items.repository:
+    class: Drupal\saved_items\SavedItemsRepository
+    arguments: ['@database', '@entity_type.manager']

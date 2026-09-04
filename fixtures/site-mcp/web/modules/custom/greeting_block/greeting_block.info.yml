@@ -1,0 +1,7 @@
+name: Greeting block
+type: module
+description: Greets the current user by name (fixture with planted cache bug).
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:block

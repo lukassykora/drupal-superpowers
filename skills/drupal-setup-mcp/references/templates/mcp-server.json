@@ -1,0 +1,16 @@
+{
+  "_comment": "MCP Server 2.x (drupal/mcp_server) + mcp_server_tool_bridge. Tools appear as tool_api__<id>; which ones exist depends on bridged Tool API tools (Tool Belt, MCP Tools bridge, Project Context Connector). STDIO runs as the Drush user; HTTP needs the 'access mcp server' permission and mcp_server_oauth for remote use.",
+  "mcpServers": {
+    "drupal": {
+      "command": "vendor/bin/drush",
+      "args": ["mcp:server"]
+    }
+  },
+  "_http_variant": {
+    "drupal": {
+      "type": "http",
+      "url": "${DRUPAL_URL}/mcp",
+      "headers": { "Authorization": "Bearer ${DRUPAL_MCP_TOKEN}" }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+    "name": "fixture/site",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://packages.drupal.org/8"
+        }
+    ],
+    "require": {
+        "composer/installers": "^2.3",
+        "drupal/core-composer-scaffold": "^10.6",
+        "drupal/core-recommended": "^10.6",
+        "drush/drush": "^12"
+    },
+    "require-dev": {
+        "drupal/core-dev": "^10.6",
+        "mglaman/phpstan-drupal": "^2.0",
+        "drupal/coder": "^9.0"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/installers": true,
+            "drupal/core-composer-scaffold": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "drupal-scaffold": {
+            "locations": {
+                "web-root": "web/"
+            }
+        },
+        "installer-paths": {
+            "web/core": [
+                "type:drupal-core"
+            ],
+            "web/modules/contrib/{$name}": [
+                "type:drupal-module"
+            ],
+            "web/modules/custom/{$name}": [
+                "type:drupal-custom-module"
+            ],
+            "web/themes/contrib/{$name}": [
+                "type:drupal-theme"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit -c web/core web/modules/custom",
+        "lint": "phpcs --standard=phpcs.xml.dist",
+        "analyse": "phpstan analyse -c phpstan.neon.dist"
+    }
+}

@@ -1,0 +1,33 @@
+<?php
+
+/**
+ * @file
+ * Helpers for Legacy tools.
+ */
+
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_form_FORM_ID_alter() for the site information form.
+ */
+function legacy_tools_form_system_site_information_settings_alter(array &$form, FormStateInterface $form_state): void {
+  $form['legacy_tools_zone'] = [
+    '#type' => 'select',
+    '#title' => t('Reporting time zone'),
+    '#options' => system_time_zones(),
+  ];
+}
+
+/**
+ * Returns a human readable upload limit.
+ */
+function legacy_tools_upload_limit(): string {
+  return format_size(\Drupal\Component\Utility\Environment::getUploadMaxSize());
+}
+
+/**
+ * Logs an exception the old way.
+ */
+function legacy_tools_log(\Throwable $e): void {
+  watchdog_exception('legacy_tools', $e);
+}

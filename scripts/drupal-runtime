@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# drupal-runtime: resolve how to run drush/composer/php/phpunit/phpcs/phpstan/npm for this project
+# and classify the environment (see docs/architecture.md §5.3, spec §27–29, §53).
+#
+#   drupal-runtime [<dir>] [--quick] [--summary]
+#     --quick    skip live probes (ddev describe, docker ps); used by hooks
+#
+# Never starts, installs, or modifies anything.
+set -u
+. "$(dirname "$0")/lib/common.sh"
+
+DIR="."; QUICK=0; SUMMARY=0
+for a in "$@"; do case "$a" in --quick) QUICK=1;; --summary) SUMMARY=1;; -*) ;; *) DIR=$a;; esac; done
+read -r ROOT KIND <<<"$(dsp_find_root "$DIR")"
+[ "$KIND" = "none" ] && ROOT=$(cd "$DIR" && pwd)
+DOCROOT=$(dsp_find_docroot "$ROOT"); D="$ROOT/$DOCROOT"; [ "$DOCROOT" = "." ] && D="$ROOT"
+
+DECLARED=""; ADAPTER="none"; STATE="unknown"; SITE_URL=""; EVIDENCE=""
+PREFIX_EXEC=""   # prefix for running a binary inside the runtime
+PREFIX_DRUSH=""  # full drush command
+PREFIX_COMPOSER=""; PREFIX_NPM=""; PREFIX_PHP=""
+
+# ---- DDEV
+if [ -f "$ROOT/.ddev/config.yaml" ]; then
+  DECLARED="$DECLARED ddev"
+  NAME=$(grep -E '^name:' "$ROOT/.ddev/config.yaml" | head -1 | awk '{print $2}' | tr -d '"')
+  if dsp_have ddev; then
+    ADAPTER="ddev"; PREFIX_EXEC="ddev exec"; PREFIX_DRUSH="ddev drush"; PREFIX_COMPOSER="ddev composer"; PREFIX_NPM="ddev npm"; PREFIX_PHP="ddev exec php"
+    SITE_URL="https://${NAME:-project}.ddev.site"; STATE="unknown"
+    if [ $QUICK -eq 0 ]; then
+      st=$( (cd "$ROOT" && ddev describe -j 2>/dev/null) | grep -o '"status": *"[a-z]*"' | head -1 | sed 's/.*"\([a-z]*\)"$/\1/') || true
+      case "$st" in running) STATE="running";; stopped|paused) STATE="stopped";; "") STATE="stopped";; *) STATE="$st";; esac
+    fi
+    EVIDENCE="$EVIDENCE|.ddev/config.yaml + ddev binary"
+  else
+    EVIDENCE="$EVIDENCE|.ddev/config.yaml present but ddev not on PATH"
+  fi
+fi
+# ---- Lando
+if [ "$ADAPTER" = "none" ] && [ -f "$ROOT/.lando.yml" ]; then
+  DECLARED="$DECLARED lando"
+  NAME=$(grep -E '^name:' "$ROOT/.lando.yml" | head -1 | awk '{print $2}' | tr -d '"')
+  if dsp_have lando; then
+    ADAPTER="lando"; PREFIX_EXEC="lando ssh -c"; PREFIX_DRUSH="lando drush"; PREFIX_COMPOSER="lando composer"; PREFIX_NPM="lando npm"; PREFIX_PHP="lando php"
+    SITE_URL="https://${NAME:-project}.lndo.site"; EVIDENCE="$EVIDENCE|.lando.yml + lando binary"
+    [ $QUICK -eq 0 ] && { (cd "$ROOT" && lando info 2>/dev/null | grep -q '"urls"') && STATE="running" || STATE="stopped"; }
+  else EVIDENCE="$EVIDENCE|.lando.yml present but lando not on PATH"; fi
+fi
+# ---- Docker Compose
+if [ "$ADAPTER" = "none" ]; then
+  for cf in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
+    [ -f "$ROOT/$cf" ] || continue
+    DECLARED="$DECLARED compose"
+    SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1}' "$ROOT/$cf" | grep -Ei '^(php|web|app|drupal|appserver|cli)$' | head -1)
+    [ -z "$SVC" ] && SVC=$(awk '/^services:/{f=1;next} f && /^  [a-zA-Z0-9_-]+:/{gsub(":","",$1); print $1; exit}' "$ROOT/$cf")
+    if dsp_have docker; then
+      ADAPTER="compose"; PREFIX_EXEC="docker compose exec $SVC"; PREFIX_DRUSH="docker compose exec $SVC vendor/bin/drush"; PREFIX_COMPOSER="docker compose exec $SVC composer"; PREFIX_NPM="docker compose exec $SVC npm"; PREFIX_PHP="docker compose exec $SVC php"
+      EVIDENCE="$EVIDENCE|$cf service $SVC + docker binary"
+      [ $QUICK -eq 0 ] && { (cd "$ROOT" && docker compose ps --status running 2>/dev/null | grep -q "$SVC") && STATE="running" || STATE="stopped"; }
+    else EVIDENCE="$EVIDENCE|$cf present but docker not on PATH"; fi
+    break
+  done
+fi
+# ---- native
+NATIVE_DRUSH=""; [ -x "$ROOT/vendor/bin/drush" ] && NATIVE_DRUSH="$ROOT/vendor/bin/drush"
+if [ "$ADAPTER" = "none" ]; then
+  if [ -n "$NATIVE_DRUSH" ] || [ -d "$ROOT/vendor" ]; then
+    ADAPTER="native"; STATE="n/a"; PREFIX_EXEC=""; PREFIX_DRUSH="${NATIVE_DRUSH:-vendor/bin/drush}"; PREFIX_COMPOSER="composer"; PREFIX_NPM="npm"; PREFIX_PHP="php"
+    EVIDENCE="$EVIDENCE|vendor/ present"
+    dsp_have php || EVIDENCE="$EVIDENCE|php not on PATH"
+  elif [ "$KIND" = "d7" ] && dsp_have drush; then
+    ADAPTER="native"; PREFIX_DRUSH="drush"; PREFIX_PHP="php"; EVIDENCE="$EVIDENCE|global drush (Drupal 7)"
+  else
+    EVIDENCE="$EVIDENCE|no vendor/ and no container runtime"
+  fi
+fi
+
+cmd() { # cmd <tool> -> resolved command or empty
+  local t=$1
+  case "$ADAPTER" in
+    none) return 0;;
+    native)
+      case "$t" in
+        drush) echo "$PREFIX_DRUSH";;
+        composer) dsp_have composer && echo composer;;
+        php) dsp_have php && echo php;;
+        npm) dsp_have npm && echo npm;;
+        phpunit|phpcs|phpstan|phpcbf) [ -x "$ROOT/vendor/bin/$t" ] && echo "vendor/bin/$t";;
+      esac;;
+    *)
+      case "$t" in
+        drush) echo "$PREFIX_DRUSH";;
+        composer) echo "$PREFIX_COMPOSER";;
+        php) echo "$PREFIX_PHP";;
+        npm) echo "$PREFIX_NPM";;
+        phpunit|phpcs|phpstan|phpcbf) echo "$PREFIX_EXEC vendor/bin/$t";;
+      esac;;
+  esac
+}
+
+# ---- project wrapper commands (composer scripts, Makefile targets) are reported, not substituted
+WRAP=""
+[ -f "$ROOT/composer.json" ] && WRAP=$(dsp_json keys "$ROOT/composer.json" scripts 2>/dev/null | grep -Ei '^(test|tests|lint|phpcs|phpstan|analyse|analyze|check|ci|quality)' | sed 's/^/composer /' || true)
+[ -f "$ROOT/Makefile" ] && WRAP="$WRAP
+$(grep -Eo '^(test|lint|phpcs|phpstan|check)[a-z-]*:' "$ROOT/Makefile" | tr -d ':' | sed 's/^/make /')"
+
+# ---- environment classification
+ENV_CLASS="UNKNOWN"; ENV_EV=""
+if [ -f "$ROOT/.drupal-superpowers-lab" ]; then ENV_CLASS="DISPOSABLE"; ENV_EV="lab marker file"
+else
+  for v in AH_SITE_ENVIRONMENT PANTHEON_ENVIRONMENT PLATFORM_BRANCH LAGOON_ENVIRONMENT_TYPE DRUPAL_ENV ENVIRONMENT APP_ENV; do
+    val=${!v:-}; [ -z "$val" ] && continue
+    case "$val" in prod|production|live|main|master) ENV_CLASS="PRODUCTION";; stage|staging|test|preprod) ENV_CLASS="STAGING";; dev|development|develop) ENV_CLASS="DEVELOPMENT";; local) ENV_CLASS="LOCAL";; esac
+    ENV_EV="$v=$val"; break
+  done
+  if [ "$ENV_CLASS" = "UNKNOWN" ]; then
+    SP="$D/sites/default/settings.php"
+    LOCAL_SIGNALS=0; REMOTE_SIGNALS=0
+    case "$ADAPTER" in ddev|lando|compose) LOCAL_SIGNALS=1;; esac
+    if [ -f "$SP" ]; then
+      hosts=$(grep -o "'host' *=> *'[^']*'" "$SP" 2>/dev/null | sed "s/.*'\([^']*\)'$/\1/" | tr '\n' ' ')
+      for h in $hosts; do case "$h" in localhost|127.0.0.1|db|database|mariadb|mysql|postgres|pgsql|ddev*|host.docker.internal) LOCAL_SIGNALS=1;; *) REMOTE_SIGNALS=1; ENV_EV="db host $h";; esac; done
+      if grep -q 'trusted_host_patterns' "$SP"; then
+        if grep -A5 'trusted_host_patterns' "$SP" | grep -Eq '\\.(com|org|net|io|cz|de|example)' ; then REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }non-local trusted_host_patterns"; fi
+      fi
+      grep -Eq 'AH_SITE_ENVIRONMENT|PANTHEON_ENVIRONMENT|PLATFORM_|LAGOON' "$SP" && { REMOTE_SIGNALS=1; ENV_EV="${ENV_EV:+$ENV_EV; }hosting env vars referenced in settings.php"; }
+    fi
+    if [ $REMOTE_SIGNALS -eq 1 ]; then ENV_CLASS="UNKNOWN"
+    elif [ $LOCAL_SIGNALS -eq 1 ]; then ENV_CLASS="LOCAL"; ENV_EV="${ENV_EV:+$ENV_EV; }local runtime/db host"
+    else ENV_CLASS="UNKNOWN"; ENV_EV="${ENV_EV:-no local or remote signals}"; fi
+  fi
+fi
+
+# ---- browser + lab
+PLAYWRIGHT=false; { [ -x "$ROOT/node_modules/.bin/playwright" ] || dsp_have playwright; } && PLAYWRIGHT=true
+LAB="none"; dsp_have ddev && LAB="ddev"; [ "$LAB" = none ] && dsp_have docker && LAB="docker"
+
+J=$(cat <<EOF
+{
+  "schema": 1,
+  "composer_root": $(dsp_jstr "$ROOT"),
+  "docroot": $(dsp_jstr "$DOCROOT"),
+  "adapter": $(dsp_jstr "$ADAPTER"),
+  "declared": $(printf '%s\n' $DECLARED | dsp_jarr),
+  "state": $(dsp_jstr "$STATE"),
+  "commands": {"drush": $(dsp_jval "$(cmd drush)"), "composer": $(dsp_jval "$(cmd composer)"), "php": $(dsp_jval "$(cmd php)"), "phpunit": $(dsp_jval "$(cmd phpunit)"), "phpcs": $(dsp_jval "$(cmd phpcs)"), "phpcbf": $(dsp_jval "$(cmd phpcbf)"), "phpstan": $(dsp_jval "$(cmd phpstan)"), "npm": $(dsp_jval "$(cmd npm)")},
+  "project_commands": $(printf '%s\n' "$WRAP" | dsp_jarr),
+  "site_url": $(dsp_jval "$SITE_URL"),
+  "environment": {"class": $(dsp_jstr "$ENV_CLASS"), "evidence": $(dsp_jval "$ENV_EV")},
+  "evidence": $(printf '%s\n' "${EVIDENCE#|}" | tr '|' '\n' | dsp_jarr),
+  "browser": {"playwright": $PLAYWRIGHT},
+  "disposable_lab": {"possible": $( [ "$LAB" != none ] && echo true || echo false ), "engine": $(dsp_jstr "$LAB")}
+}
+EOF
+)
+if [ $SUMMARY -eq 1 ]; then
+  printf 'runtime: %s (%s)%s · env: %s%s\n' "$ADAPTER" "$STATE" "$( [ -n "$(echo $DECLARED)" ] && printf ' · declared:%s' "$(echo $DECLARED | sed 's/^/ /')" )" "$ENV_CLASS" "${ENV_EV:+ ($ENV_EV)}"
+  [ "$ADAPTER" = none ] && [ -n "$(echo $DECLARED)" ] && printf 'evidence: %s\n' "$(echo "${EVIDENCE#|}" | tr '|' ';')"
+  printf 'drush: %s · phpunit: %s · phpcs: %s\n' "$(cmd drush)" "$(cmd phpunit)" "$(cmd phpcs)"
+  [ -n "$(echo $WRAP)" ] && printf 'project commands: %s\n' "$(echo $WRAP)"
+  [ "$ADAPTER" = none ] && printf 'no runnable environment; disposable lab engine: %s\n' "$LAB"
+else
+  printf '%s\n' "$J"
+fi

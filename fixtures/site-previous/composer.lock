@@ -1,0 +1,73 @@
+{
+    "_readme": [
+        "FIXTURE: minimal composer.lock slice for drupal-superpowers evals. Not installable."
+    ],
+    "content-hash": "fixture",
+    "packages": [
+        {
+            "name": "drupal/core",
+            "version": "10.6.16",
+            "type": "drupal-core",
+            "require": {
+                "php": ">=8.1.0"
+            }
+        },
+        {
+            "name": "drupal/core-composer-scaffold",
+            "version": "10.6.16",
+            "type": "composer-plugin"
+        },
+        {
+            "name": "drupal/core-recommended",
+            "version": "10.6.16",
+            "type": "metapackage"
+        },
+        {
+            "name": "drush/drush",
+            "version": "12.5.3",
+            "type": "library"
+        },
+        {
+            "name": "symfony/http-kernel",
+            "version": "v6.4.20",
+            "type": "library"
+        }
+    ],
+    "packages-dev": [
+        {
+            "name": "drupal/core-dev",
+            "version": "10.6.16",
+            "type": "metapackage"
+        },
+        {
+            "name": "phpunit/phpunit",
+            "version": "10.5.45",
+            "type": "library"
+        },
+        {
+            "name": "mglaman/phpstan-drupal",
+            "version": "2.1.2",
+            "type": "phpstan-extension"
+        },
+        {
+            "name": "phpstan/phpstan",
+            "version": "2.1.22",
+            "type": "library"
+        },
+        {
+            "name": "drupal/coder",
+            "version": "9.0.1",
+            "type": "phpcodesniffer-standard"
+        }
+    ],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">=8.1"
+    },
+    "platform-dev": {},
+    "plugin-api-version": "2.6.0"
+}

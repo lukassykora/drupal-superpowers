@@ -1,0 +1,5 @@
+name: Broken service
+type: module
+description: Sends notifications (fixture with a planted service definition error).
+package: Custom
+core_version_requirement: ^11

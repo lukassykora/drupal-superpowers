@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# PreToolUse(Bash) guard: block destructive Drupal/database/git commands unless the environment is
+# DISPOSABLE (spec §52–53). Exit 2 = block with reason on stderr. Exit 0 = allow (optionally with a note).
+# The destructive list below is the single source of truth; evals/scenarios/dangerous-env tests it.
+set -u
+PLUGIN="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$PLUGIN/scripts/lib/common.sh"
+
+input=$(cat 2>/dev/null || true)
+[ -z "$input" ] && exit 0
+tmp=$(mktemp); printf '%s' "$input" > "$tmp"
+cmd=$(dsp_json get "$tmp" tool_input.command)
+cwd=$(dsp_json get "$tmp" cwd)
+rm -f "$tmp"
+[ -z "$cmd" ] && exit 0
+[ -z "$cwd" ] && cwd=$(pwd)
+
+# Only care when a Drupal project is in play (cwd or the command mentions drush/composer/sql).
+read -r ROOT KIND <<<"$(dsp_find_root "$cwd")"
+if [ "$KIND" = "none" ] && ! printf '%s' "$cmd" | grep -Eq 'drush|composer|sql|mysql|psql|DROP |DELETE '; then exit 0; fi
+
+# Normalise: strip wrappers so "ddev drush cim -y" and "docker compose exec php vendor/bin/drush cim -y" both match.
+norm=$(printf '%s' "$cmd" | sed -E 's/(ddev|lando) +//g; s#(docker +compose|docker-compose) +exec +(-T +)?[a-zA-Z0-9_-]+ +##g; s#vendor/bin/##g; s/ +/ /g')
+
+reason=""
+match() { printf '%s' "$norm" | grep -Eqi -- "$1"; }
+if match 'drush +(sql-drop|sql:drop)'; then reason="drush sql:drop destroys the database"
+elif match 'drush +(site:install|site-install|si)( |$)'; then reason="drush site:install reinstalls the site and wipes its database"
+elif match 'drush +(cim|config:import|config-import)[^|;&]* -y'; then reason="drush cim -y overwrites active configuration without review (use config:status / cim --preview=diff first)"
+elif match 'drush +(entity:delete|entity-delete|edel)'; then reason="drush entity:delete removes content"
+elif match 'drush +(sql:query|sql-query|sqlq)[^|;&]*(drop |delete |truncate )'; then reason="destructive SQL via drush sql:query"
+elif match 'drush +(sql:cli|sql-cli|sqlc)[^|;&]*<'; then reason="piping SQL into drush sql:cli may be destructive"
+elif match 'drush +(sql:sync|sql-sync)'; then reason="drush sql:sync overwrites a database"
+elif match 'drush +(pm:uninstall|pmu|pm-uninstall)'; then reason="uninstalling a module deletes its data and config"
+elif match 'drush +(user:password|upwd)'; then reason="changing user passwords"
+elif match '(^|[;&| ])drop +(table|database)'; then reason="DROP TABLE/DATABASE"
+elif match '(^|[;&| ])(delete +from|truncate +table?) +[a-z_`]+ *(;|$)'; then reason="DELETE/TRUNCATE without a WHERE clause"
+elif match '(^|[;&| ])rm +-rf? +(/|~|\.|\$HOME|\*|'"$(printf '%s' "$ROOT" | sed 's/[.[\*^$/]/\\&/g')"')( |$)'; then reason="rm -rf on the project root or a system path"
+elif match 'git +reset +--hard'; then reason="git reset --hard discards uncommitted work"
+elif match 'git +clean +-[a-z]*f'; then reason="git clean -f deletes untracked files"
+elif match 'git +push +[^|;&]*(--force|-f)( |$)'; then reason="force push rewrites shared history"
+elif match '(^|[;&| ])composer +update( |$)' && ! match 'composer +update +[^ -]'; then reason="unbounded composer update changes every dependency (name the packages, or use --dry-run)"
+fi
+[ -z "$reason" ] && exit 0
+
+env_class="UNKNOWN"
+[ "$KIND" != "none" ] && env_class=$("$PLUGIN/scripts/drupal-runtime" "$cwd" --quick 2>/dev/null | sed -n 's/.*"environment": *{"class": *"\([A-Z]*\)".*/\1/p' | head -1)
+[ -z "$env_class" ] && env_class="UNKNOWN"
+
+if [ "$env_class" = "DISPOSABLE" ]; then exit 0; fi
+
+cat >&2 <<EOF
+drupal-superpowers guard: blocked "$cmd"
+Reason: $reason. Environment class: $env_class (only DISPOSABLE environments allow this without explicit user consent).
+Do this instead: state the exact command and its effect, get the user's explicit approval for THIS environment, take a backup first (drush sql:dump), or use a disposable copy. If the user already approved this exact command in this conversation, tell them the guard blocked it and ask them to run it themselves with "! <command>".
+EOF
+exit 2

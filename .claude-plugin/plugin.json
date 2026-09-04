@@ -1,0 +1,12 @@
+{
+  "name": "drupal-superpowers",
+  "version": "0.1.0",
+  "description": "Disciplined Drupal engineering for Claude Code: project and version detection, Drupal-native design, security and cacheability by default, tests as evidence, runtime verification, and a completion gate. Works standalone or alongside Superpowers.",
+  "author": {
+    "name": "Lukáš Sýkora"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/lukassykora/drupal-superpowers",
+  "repository": "https://github.com/lukassykora/drupal-superpowers",
+  "keywords": ["drupal", "php", "drush", "ddev", "phpunit", "security", "cacheability", "upgrade"]
+}

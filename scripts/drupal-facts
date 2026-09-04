@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# drupal-facts: query the version-gated fact registry and the support matrix.
+#
+#   drupal-facts class <drupal-version>        -> current|previous|eol|dev|unknown, EOL date, note
+#   drupal-facts check <fact-id> <version>     -> applies|not-applies|unknown + citation
+#   drupal-facts list [<version>]              -> all facts, with applies/not-applies when a version is given
+#   drupal-facts staleness [--max-days N]      -> exit 1 when the matrix or registry is older than N days (default 120)
+#
+# Output is plain text for humans; add --json for machine output where supported.
+set -euo pipefail
+. "$(dirname "$0")/lib/common.sh"
+
+MATRIX="$DSP_ROOT/references/versions/matrix.md"
+FACTS="$DSP_ROOT/references/versions/facts.json"
+
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+branch_of() { echo "$1" | awk -F. '{ if ($1+0 < 10) print $1; else print $1"."$2 }'; }
+
+matrix_json() { dsp_md_json_block "$MATRIX" support; }
+
+cmd_class() {
+  local v=${1:-}; [ -n "$v" ] || usage
+  local br; br=$(branch_of "$v")
+  local tmp; tmp=$(mktemp); matrix_json > "$tmp"
+  local n i=0 cls eol reviewed
+  reviewed=$(dsp_json get "$tmp" last_reviewed)
+  n=$(dsp_json get "$tmp" branches | grep -o '"branch"' | wc -l | tr -d ' ')
+  cls=""; eol=""
+  while [ $i -lt "$n" ]; do
+    if [ "$(dsp_json get "$tmp" "branches.$i.branch")" = "$br" ]; then
+      cls=$(dsp_json get "$tmp" "branches.$i.class"); eol=$(dsp_json get "$tmp" "branches.$i.eol"); break
+    fi
+    i=$((i+1))
+  done
+  rm -f "$tmp"
+  local note=""
+  if [ -z "$cls" ]; then
+    cls="unknown"; note="branch $br not in matrix (last_reviewed $reviewed); check drupal.org/project/drupal/releases"
+  fi
+  case "$v" in *-dev|*-alpha*|*-beta*|*-rc*|*.x) [ "$cls" = "unknown" ] || cls="dev";; esac
+  if stale_days "$reviewed" 120; then note="${note:+$note; }matrix last_reviewed $reviewed is older than 120 days: verify the class against drupal.org before relying on it"; fi
+  if [ "${2:-}" = "--json" ]; then
+    printf '{"version":%s,"branch":%s,"class":%s,"eol_date":%s,"matrix_reviewed":%s,"note":%s}\n' \
+      "$(dsp_jstr "$v")" "$(dsp_jstr "$br")" "$(dsp_jstr "$cls")" "$(dsp_jval "$eol")" "$(dsp_jstr "$reviewed")" "$(dsp_jval "$note")"
+  else
+    printf 'version: %s\nbranch: %s\nclass: %s\neol: %s\n' "$v" "$br" "$cls" "${eol:-n/a}"
+    [ -n "$note" ] && printf 'note: %s\n' "$note"
+  fi
+  return 0
+}
+
+# stale_days <YYYY-MM-DD> <max> -> 0 when older than max days
+stale_days() {
+  local d=$1 max=$2 then now
+  if date -j -f '%Y-%m-%d' "$d" '+%s' >/dev/null 2>&1; then then=$(date -j -f '%Y-%m-%d' "$d" '+%s'); else then=$(date -d "$d" '+%s' 2>/dev/null || echo 0); fi
+  now=$(date '+%s')
+  [ $(( (now - then) / 86400 )) -gt "$max" ]
+}
+
+fact_count() { dsp_json get "$FACTS" facts | grep -o '"id"' | wc -l | tr -d ' '; }
+
+fact_field() { dsp_json get "$FACTS" "facts.$1.$2"; }
+
+applies() { # applies <since> <until> <version> -> applies|not-applies
+  local since=$1 until=$2 v=$3
+  if [ -n "$since" ] && ! dsp_vergte "$v" "$since"; then echo "not-applies"; return; fi
+  if [ -n "$until" ] && dsp_vergte "$v" "$until"; then echo "not-applies"; return; fi
+  echo "applies"
+}
+
+cmd_check() {
+  local id=${1:-} v=${2:-}; [ -n "$id" ] && [ -n "$v" ] || usage
+  local n i=0; n=$(fact_count)
+  while [ $i -lt "$n" ]; do
+    if [ "$(fact_field $i id)" = "$id" ]; then
+      local since until res; since=$(fact_field $i since); until=$(fact_field $i until); [ "$until" = "null" ] && until=""
+      res=$(applies "$since" "$until" "$v")
+      printf 'fact: %s\nversion: %s\nresult: %s\nstatement: %s\nsince: %s\nuntil: %s\nchange_record: %s\nverify_in_core: %s\n' \
+        "$id" "$v" "$res" "$(fact_field $i statement)" "$since" "${until:-—}" "$(fact_field $i change_record)" "$(fact_field $i verify_in_core)"
+      local note; note=$(fact_field $i note); [ -n "$note" ] && printf 'note: %s\n' "$note"
+      return 0
+    fi
+    i=$((i+1))
+  done
+  printf 'fact: %s\nresult: unknown (no such fact id; verify in installed core source)\n' "$id"; return 2
+}
+
+cmd_list() {
+  local v=${1:-} n i=0; n=$(fact_count)
+  while [ $i -lt "$n" ]; do
+    local id since until; id=$(fact_field $i id); since=$(fact_field $i since); until=$(fact_field $i until); [ "$until" = "null" ] && until=""
+    if [ -n "$v" ]; then printf '%-40s %-12s since %-8s until %-8s  %s\n' "$id" "$(applies "$since" "$until" "$v")" "$since" "${until:-—}" "$(fact_field $i change_record)"
+    else printf '%-40s since %-8s until %-8s  %s\n' "$id" "$since" "${until:-—}" "$(fact_field $i statement)"; fi
+    i=$((i+1))
+  done
+}
+
+cmd_staleness() {
+  local max=120; [ "${1:-}" = "--max-days" ] && max=${2:-120}
+  local rc=0 m f
+  m=$(matrix_json | grep -o '"last_reviewed": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+  f=$(dsp_json get "$FACTS" _meta.last_reviewed)
+  for pair in "matrix:$m" "facts:$f"; do
+    local name=${pair%%:*} d=${pair#*:}
+    if stale_days "$d" "$max"; then echo "STALE: $name last_reviewed $d (> $max days)"; rc=1; else echo "ok: $name last_reviewed $d"; fi
+  done
+  return $rc
+}
+
+case "${1:-}" in
+  class) shift; cmd_class "$@";;
+  check) shift; cmd_check "$@";;
+  list) shift; cmd_list "$@";;
+  staleness) shift; cmd_staleness "$@";;
+  *) usage;;
+esac

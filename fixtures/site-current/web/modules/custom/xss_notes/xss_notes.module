@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Theme hooks for XSS notes.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function xss_notes_theme(): array {
+  return [
+    'xss_notes_note' => [
+      'variables' => ['title' => NULL, 'body' => NULL, 'author' => NULL],
+    ],
+  ];
+}

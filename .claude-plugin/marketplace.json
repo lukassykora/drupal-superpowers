@@ -1,0 +1,14 @@
+{
+  "name": "drupal-superpowers-dev",
+  "owner": {
+    "name": "Luk\u00e1\u0161 S\u00fdkora"
+  },
+  "plugins": [
+    {
+      "name": "drupal-superpowers",
+      "source": "./",
+      "description": "Disciplined Drupal engineering for Claude Code."
+    }
+  ],
+  "description": "Development marketplace for the drupal-superpowers plugin (local install via claude plugin marketplace add ./)."
+}

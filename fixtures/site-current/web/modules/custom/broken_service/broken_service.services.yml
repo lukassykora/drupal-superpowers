@@ -1,0 +1,4 @@
+services:
+  broken_service.notifier:
+    class: Drupal\broken_service\Service\Notifier
+    arguments: ['@logger.factory', '@entity.manager']

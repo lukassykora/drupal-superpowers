@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# contrib-info <machine_name> [<drupal major>]: read-only summary of a drupal.org project from the
+# drupal.org REST API (api-d7). Prints "unavailable" sections when offline or rate-limited.
+set -u
+NAME=${1:-}; MAJOR=${2:-}
+[ -n "$NAME" ] || { echo "usage: contrib-info <machine_name> [<drupal major>]"; exit 1; }
+command -v curl >/dev/null || { echo "unavailable: curl missing"; exit 0; }
+J() { python3 -c "$1" 2>/dev/null || php -r "$2" 2>/dev/null; }
+
+proj=$(curl -s --max-time 15 "https://www.drupal.org/api-d7/node.json?field_project_machine_name=$NAME" || true)
+[ -n "$proj" ] || { echo "unavailable: drupal.org did not answer"; exit 0; }
+nid=$(printf '%s' "$proj" | grep -o '"nid":"[0-9]*"' | head -1 | sed 's/[^0-9]//g')
+[ -n "$nid" ] || { echo "project '$NAME' not found on drupal.org"; exit 0; }
+title=$(printf '%s' "$proj" | grep -o '"title":"[^"]*"' | head -1 | sed 's/"title":"//; s/"$//')
+sec=$(printf '%s' "$proj" | grep -o '"field_security_advisory_coverage":"[^"]*"' | head -1 | sed 's/.*:"//; s/"$//')
+maint=$(printf '%s' "$proj" | grep -o '"taxonomy_vocabulary_44":{"[^}]*}' | head -1 | grep -o '"id":"[0-9]*"' | sed 's/[^0-9]//g')
+devst=$(printf '%s' "$proj" | grep -o '"taxonomy_vocabulary_46":{"[^}]*}' | head -1 | grep -o '"id":"[0-9]*"' | sed 's/[^0-9]//g')
+case "$maint" in 13028) maint="Actively maintained";; 13030) maint="Minimally maintained";; 13032) maint="Unsupported";; 13034) maint="Seeking new maintainer";; *) maint="tid $maint (see project page)";; esac
+case "$devst" in 9988) devst="Under active development";; 9990) devst="Maintenance fixes only";; 9992) devst="No further development";; 9994) devst="Obsolete";; *) devst="tid $devst";; esac
+echo "project: $title ($NAME, nid $nid)  https://www.drupal.org/project/$NAME"
+echo "security advisory coverage: ${sec:-unknown}"
+echo "maintenance: $maint · development: $devst"
+echo
+echo "releases (newest 15):"
+rel=$(curl -s --max-time 15 "https://www.drupal.org/api-d7/node.json?type=project_release&field_release_project=$nid&limit=15&sort=created&direction=DESC" || true)
+if [ -n "$rel" ]; then
+  printf '%s' "$rel" | grep -o '"title":"[^"]*"\|"field_release_category":"[^"]*"\|"created":"[0-9]*"' | paste - - - 2>/dev/null | sed 's/"title":"//; s/"//g; s/field_release_category://; s/created://' | awk '{ cmd="date -r "$3" +%Y-%m-%d 2>/dev/null || date -d @"$3" +%Y-%m-%d"; cmd | getline d; close(cmd); print "  " $1 "  " $2 "  " d }' | head -15
+  [ -n "$MAJOR" ] && { echo; echo "hint: look for releases whose version starts with a branch supporting Drupal $MAJOR (check core_version_requirement in the release's info.yml)."; }
+else echo "  unavailable"; fi
+echo
+echo "open critical issues:"
+iss=$(curl -s --max-time 15 "https://www.drupal.org/api-d7/node.json?type=project_issue&field_project=$nid&field_issue_priority=400&field_issue_status=1&limit=5" || true)
+if [ -n "$iss" ]; then
+  n=$(printf '%s' "$iss" | grep -o '"title":"[^"]*"' | wc -l | tr -d ' ')
+  [ "$n" = 0 ] && echo "  none (status: active)" || printf '%s' "$iss" | grep -o '"title":"[^"]*"' | sed 's/"title":"/  - /; s/"$//' | head -5
+else echo "  unavailable"; fi
+echo
+echo "usage: https://www.drupal.org/project/usage/$NAME   (per-branch counts; not in the API)"

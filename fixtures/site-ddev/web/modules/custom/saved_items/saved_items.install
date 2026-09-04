@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Install hooks for Saved items.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function saved_items_schema(): array {
+  $schema['saved_items'] = [
+    'description' => 'Nodes saved by users.',
+    'fields' => [
+      'uid' => ['type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE],
+      'nid' => ['type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE],
+      'created' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+    ],
+    'primary key' => ['uid', 'nid'],
+    'indexes' => ['nid' => ['nid']],
+  ];
+  return $schema;
+}

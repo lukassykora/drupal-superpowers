@@ -1,0 +1,13 @@
+_core:
+  default_config_hash: fixture
+module:
+  block: 0
+  node: 0
+  path_alias: 0
+  saved_items: 0
+  system: 0
+  user: 0
+theme:
+  claro: 0
+  olivero: 0
+profile: minimal

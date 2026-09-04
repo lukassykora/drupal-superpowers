@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# drupal-profile: static Project Capability Profile as JSON (see docs/architecture.md §5.1).
+# Never executes Drush, Composer, or PHP code from the project; safe in any environment.
+#
+#   drupal-profile [<dir>] [--no-cache] [--summary]
+#
+set -u
+. "$(dirname "$0")/lib/common.sh"
+
+DIR="."; NOCACHE=0; SUMMARY=0
+for a in "$@"; do case "$a" in --no-cache) NOCACHE=1;; --summary) SUMMARY=1;; -*) ;; *) DIR=$a;; esac; done
+
+read -r ROOT KIND <<<"$(dsp_find_root "$DIR")"
+
+if [ "$KIND" = "none" ]; then
+  printf '{"schema":1,"generated_at":%s,"composer_root":null,"project_kind":"unknown","drupal":null,"note":"no Drupal project found walking up from %s"}\n' "$(dsp_jstr "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" "$(cd "$DIR" && pwd)"
+  exit 0
+fi
+
+# ---- cache
+DATA=$(dsp_data_dir)
+KEY=$(printf '%s' "$ROOT" | (dsp_have shasum && shasum | cut -c1-12 || cksum | cut -d' ' -f1))
+CACHE="$DATA/profiles/$KEY.json"
+STAMP=""
+for f in composer.lock composer.json .ddev/config.yaml .lando.yml .mcp.json; do [ -f "$ROOT/$f" ] && STAMP="$STAMP $(stat -f '%m' "$ROOT/$f" 2>/dev/null || stat -c '%Y' "$ROOT/$f" 2>/dev/null)"; done
+if [ $NOCACHE -eq 0 ] && [ -f "$CACHE" ] && [ -f "$CACHE.stamp" ] && [ "$(cat "$CACHE.stamp")" = "$STAMP" ]; then
+  if [ $SUMMARY -eq 1 ]; then "$0" "$DIR" --summary --no-cache; else cat "$CACHE"; fi
+  exit 0
+fi
+
+CJ="$ROOT/composer.json"; CL="$ROOT/composer.lock"
+DOCROOT=$(dsp_find_docroot "$ROOT")
+D="$ROOT/$DOCROOT"; [ "$DOCROOT" = "." ] && D="$ROOT"
+
+# ---- versions from composer.lock (name version per line)
+LOCKV=""; [ -f "$CL" ] && LOCKV=$(dsp_json lockversions "$CL" || true)
+lockver() { printf '%s\n' "$LOCKV" | awk -v n="$1" '$1==n {print $2; exit}'; }
+haslock() { [ -n "$(lockver "$1")" ]; }
+
+DRUPAL_VERSION=""; DRUPAL_SOURCE=""
+if [ "$KIND" = "d7" ]; then
+  DRUPAL_VERSION=$(grep -o "define('VERSION', '[^']*')" "$ROOT/includes/bootstrap.inc" | sed "s/.*'\([^']*\)')/\1/"); DRUPAL_SOURCE="bootstrap.inc"
+else
+  DRUPAL_VERSION=$(lockver drupal/core); [ -n "$DRUPAL_VERSION" ] && DRUPAL_SOURCE="composer.lock"
+  if [ -z "$DRUPAL_VERSION" ] && [ -f "$D/core/lib/Drupal.php" ]; then
+    DRUPAL_VERSION=$(grep -o "const VERSION = '[^']*'" "$D/core/lib/Drupal.php" | sed "s/.*'\([^']*\)'/\1/"); DRUPAL_SOURCE="Drupal.php"
+  fi
+  if [ -z "$DRUPAL_VERSION" ] && [ -f "$CJ" ]; then
+    c=$(dsp_json get "$CJ" require.drupal/core-recommended); [ -z "$c" ] && c=$(dsp_json get "$CJ" require.drupal/core)
+    [ -z "$c" ] && c=$(dsp_json get "$CJ" require.drupal/core-composer-scaffold)
+    if [ -n "$c" ]; then DRUPAL_VERSION=$(echo "$c" | grep -o '[0-9]\+\(\.[0-9]\+\)*' | head -1); DRUPAL_SOURCE="composer.json-constraint"; fi
+  fi
+fi
+MAJOR=${DRUPAL_VERSION%%.*}; MINOR=""; case "$DRUPAL_VERSION" in *.*) MINOR=$(echo "$DRUPAL_VERSION" | cut -d. -f2 | grep -o '^[0-9]*');; esac
+
+# ---- router
+ROUTER='{"class":"unknown","eol_date":null,"note":"no version detected"}'
+[ -n "$DRUPAL_VERSION" ] && ROUTER=$("$(dirname "$0")/drupal-facts" class "$DRUPAL_VERSION" --json)
+
+# ---- distribution
+DIST="core"
+if [ -f "$CJ" ] && grep -q '"drupal/cms"' "$CJ" 2>/dev/null; then DIST="drupal-cms"; fi
+if [ -f "$ROOT/config/sync/core.extension.yml" ]; then p=$(grep '^profile:' "$ROOT/config/sync/core.extension.yml" | awk '{print $2}'); [ -n "$p" ] && [ "$p" != "minimal" ] && [ "$p" != "standard" ] && DIST="profile:$p"; fi
+
+# ---- project kind
+PKIND="site"
+if [ "$KIND" = "d7" ]; then PKIND="site"
+elif [ "$KIND" = "core" ]; then PKIND="core"
+elif [ -f "$CJ" ] && grep -Eq '"type": *"drupal-(module|theme|profile|custom-module)"' "$CJ"; then
+  PKIND="custom-module"; grep -q '"name": *"drupal/' "$CJ" && [ -f "$ROOT/.gitlab-ci.yml" ] && PKIND="contrib-module"
+fi
+
+# ---- php
+PHP_CONSTRAINT=""; [ -f "$CJ" ] && PHP_CONSTRAINT=$(dsp_json get "$CJ" require.php)
+[ -z "$PHP_CONSTRAINT" ] && [ -f "$CL" ] && PHP_CONSTRAINT=$(dsp_json get "$CL" platform.php)
+PHP_LOCAL=""; dsp_have php && PHP_LOCAL=$(php -r 'echo PHP_VERSION;' 2>/dev/null || true)
+
+# ---- paths
+list_dirs_with_info() { # $1 base
+  [ -d "$1" ] || return 0
+  find "$1" -maxdepth 3 -name '*.info.yml' 2>/dev/null | while read -r f; do dirname "$f"; done | sort -u
+}
+CUSTOM_MODULE_DIRS=""; for c in "$D/modules/custom" "$D/modules" "$ROOT/modules/custom"; do [ -d "$c" ] && CUSTOM_MODULE_DIRS="$c"; [ -d "$D/modules/custom" ] && break; done
+CUSTOM_MODULES=$( [ -d "$D/modules/custom" ] && list_dirs_with_info "$D/modules/custom" | xargs -n1 basename 2>/dev/null || true)
+[ "$KIND" = "d7" ] && CUSTOM_MODULES=$(find "$ROOT/sites/all/modules/custom" "$ROOT/sites/all/modules" -maxdepth 2 -name '*.info' 2>/dev/null | xargs -n1 dirname 2>/dev/null | xargs -n1 basename 2>/dev/null | sort -u || true)
+if [ "$PKIND" = "custom-module" ] || [ "$PKIND" = "contrib-module" ]; then CUSTOM_MODULES=$(basename "$ROOT"); fi
+CUSTOM_THEMES=$( [ -d "$D/themes/custom" ] && list_dirs_with_info "$D/themes/custom" | xargs -n1 basename 2>/dev/null || true)
+PROFILES=$( [ -d "$D/profiles/custom" ] && list_dirs_with_info "$D/profiles/custom" | xargs -n1 basename 2>/dev/null || true)
+RECIPES=$( [ -d "$ROOT/recipes" ] && find "$ROOT/recipes" -maxdepth 2 -name recipe.yml 2>/dev/null | xargs -n1 dirname 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+CONFIG_SYNC=""
+if [ -f "$D/sites/default/settings.php" ]; then CONFIG_SYNC=$(grep -o "config_sync_directory'\] *= *'[^']*'" "$D/sites/default/settings.php" 2>/dev/null | head -1 | sed "s/.*'\([^']*\)'$/\1/"); fi
+[ -z "$CONFIG_SYNC" ] && [ -d "$ROOT/config/sync" ] && CONFIG_SYNC="config/sync"
+CONFIG_SPLIT=false; { haslock drupal/config_split || ls "$ROOT/${CONFIG_SYNC#../}"/config_split.*.yml >/dev/null 2>&1; } && CONFIG_SPLIT=true
+
+# ---- modules
+CONTRIB=$(printf '%s\n' "$LOCKV" | awk '$1 ~ /^drupal\// && $1 !~ /^drupal\/(core|coder|cms$|recommended-project|legacy-project)/ {sub("drupal/","",$1); print $1}' | sort)
+PATCHED=""; [ -f "$CJ" ] && PATCHED=$(dsp_json keys "$CJ" extra.patches || true)
+
+# ---- features
+EXT="$ROOT/${CONFIG_SYNC#../}/core.extension.yml"; [ -f "$EXT" ] || EXT=""
+extmod() { [ -n "$EXT" ] && grep -q "^  $1:" "$EXT"; }
+MULTISITE=false; [ -f "$D/sites/sites.php" ] && MULTISITE=true
+MULTILINGUAL=false; { extmod language || extmod content_translation; } && MULTILINGUAL=true
+MODERATION=false; extmod content_moderation && MODERATION=true
+WORKSPACES=false; extmod workspaces && WORKSPACES=true
+SEARCH="none"; haslock drupal/search_api_solr && SEARCH="search_api_solr"; [ "$SEARCH" = none ] && haslock drupal/search_api && SEARCH="search_api"; [ "$SEARCH" = none ] && extmod search && SEARCH="core"
+QUEUE="core"; haslock drupal/advancedqueue && QUEUE="advancedqueue"
+CRON="core"; haslock drupal/ultimate_cron && CRON="ultimate_cron"
+DBTYPE="unknown"; [ -f "$D/sites/default/settings.php" ] && DBTYPE=$(grep -o "'driver' *=> *'[a-z]*'" "$D/sites/default/settings.php" 2>/dev/null | head -1 | sed "s/.*'\([a-z]*\)'$/\1/"); [ -z "$DBTYPE" ] && DBTYPE="unknown"
+
+# ---- quality
+first_existing() { for f in "$@"; do [ -e "$ROOT/$f" ] && { echo "$f"; return; }; done; }
+PHPCS_CFG=$(first_existing phpcs.xml phpcs.xml.dist .phpcs.xml .phpcs.xml.dist)
+PHPSTAN_CFG=$(first_existing phpstan.neon phpstan.neon.dist phpstan.dist.neon)
+PHPUNIT_CFG=$(first_existing phpunit.xml phpunit.xml.dist "$DOCROOT/core/phpunit.xml" "$DOCROOT/core/phpunit.xml.dist")
+SCRIPTS=""; [ -f "$CJ" ] && SCRIPTS=$(dsp_json keys "$CJ" scripts || true)
+CI="none"; [ -f "$ROOT/.gitlab-ci.yml" ] && CI="gitlab"; [ -d "$ROOT/.github/workflows" ] && CI="github"; [ -f "$ROOT/bitbucket-pipelines.yml" ] && CI="bitbucket"
+ESLINT=false; ls "$ROOT"/.eslintrc* "$ROOT"/eslint.config.* >/dev/null 2>&1 && ESLINT=true
+STYLELINT=false; ls "$ROOT"/.stylelintrc* "$ROOT"/stylelint.config.* >/dev/null 2>&1 && STYLELINT=true
+MAKE=""; [ -f "$ROOT/Makefile" ] && MAKE="Makefile"; [ -f "$ROOT/Taskfile.yml" ] && MAKE="Taskfile.yml"
+
+# ---- frontend
+PM="none"; [ -f "$ROOT/package.json" ] && PM="npm"; [ -f "$ROOT/yarn.lock" ] && PM="yarn"; [ -f "$ROOT/pnpm-lock.yaml" ] && PM="pnpm"
+BUILD="none"; ls "$ROOT"/vite.config.* >/dev/null 2>&1 && BUILD="vite"; ls "$ROOT"/webpack.config.* >/dev/null 2>&1 && BUILD="webpack"
+SDC=false; ls -d "$D"/themes/custom/*/components >/dev/null 2>&1 && SDC=true
+
+# ---- testing frameworks
+TF=""
+[ -n "$PHPUNIT_CFG" ] || haslock phpunit/phpunit && TF="phpunit"
+haslock weitzman/drupal-test-traits && TF="$TF dtt"
+{ [ -f "$ROOT/behat.yml" ] || haslock drupal/drupal-extension; } && TF="$TF behat"
+ls "$ROOT"/cypress.config.* >/dev/null 2>&1 && TF="$TF cypress"
+ls "$ROOT"/playwright.config.* >/dev/null 2>&1 && TF="$TF playwright"
+[ -f "$ROOT/nightwatch.conf.js" ] && TF="$TF nightwatch"
+
+# ---- mcp + agent skills
+MCP_SERVERS=""; MCP_HINTS=""
+if [ -f "$ROOT/.mcp.json" ]; then
+  MCP_SERVERS=$(dsp_json keys "$ROOT/.mcp.json" mcpServers || true)
+  for pat in mcp-tools:serve mcp:server drush-mcp mcp-server-drupal ddev-mcp _mcp_tools /mcp/post mo-mcp-server mcp-stub; do grep -q "$pat" "$ROOT/.mcp.json" && MCP_HINTS="$MCP_HINTS $pat"; done
+fi
+for m in mcp_tools mcp_server mcp project_context_connector drush_webmaster; do haslock "drupal/$m" && MCP_HINTS="$MCP_HINTS composer:drupal/$m"; done
+AS_PROJECT=$(ls -d "$ROOT"/.agents/skills/*/ 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+AS_VENDOR=$(find "$ROOT/vendor" -maxdepth 4 -type d -path '*/.agents/skills/*' 2>/dev/null | head -20 || true)
+
+# ---- deployment hints
+DEPLOY=""
+for f in "$ROOT/.gitlab-ci.yml" "$ROOT"/.github/workflows/*.yml "$ROOT/Makefile" "$ROOT/Taskfile.yml" "$ROOT/composer.json"; do
+  [ -f "$f" ] || continue
+  grep -Eo 'drush (deploy|updb|cim|config:import|cr)( -y)?' "$f" 2>/dev/null | sort -u | while read -r h; do echo "$(basename "$f"): $h"; done
+done | sort -u > /tmp/dsp_deploy.$$ 2>/dev/null || true
+DEPLOY=$(cat /tmp/dsp_deploy.$$ 2>/dev/null || true); rm -f /tmp/dsp_deploy.$$
+
+# ---- emit
+J=$(cat <<EOF
+{
+  "schema": 1,
+  "generated_at": $(dsp_jstr "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
+  "composer_root": $(dsp_jstr "$ROOT"),
+  "docroot": $(dsp_jstr "$DOCROOT"),
+  "project_kind": $(dsp_jstr "$PKIND"),
+  "drupal": {"version": $(dsp_jval "$DRUPAL_VERSION"), "major": ${MAJOR:-null}, "minor": ${MINOR:-null}, "source": $(dsp_jval "$DRUPAL_SOURCE"), "distribution": $(dsp_jstr "$DIST")},
+  "router": $ROUTER,
+  "php": {"constraint": $(dsp_jval "$PHP_CONSTRAINT"), "local_cli": $(dsp_jval "$PHP_LOCAL")},
+  "packages": {"drush": $(dsp_jval "$(lockver drush/drush)"), "symfony_http_kernel": $(dsp_jval "$(lockver symfony/http-kernel)"), "phpunit": $(dsp_jval "$(lockver phpunit/phpunit)"), "coder": $(dsp_jval "$(lockver drupal/coder)"), "phpstan_drupal": $(dsp_jval "$(lockver mglaman/phpstan-drupal)"), "drupal_rector": $(dsp_jval "$(lockver palantirnet/drupal-rector)"), "upgrade_status": $(dsp_jval "$(lockver drupal/upgrade_status)"), "core_dev": $( haslock drupal/core-dev && echo true || echo false ), "composer_patches": $(dsp_jval "$(lockver cweagans/composer-patches)")},
+  "paths": {"custom_modules": $(printf '%s\n' "${CUSTOM_MODULE_DIRS#$ROOT/}" | dsp_jarr), "custom_themes": $( [ -d "$D/themes/custom" ] && printf '%s\n' "$DOCROOT/themes/custom" | dsp_jarr || echo '[]'), "profiles": $(printf '%s\n' "$PROFILES" | dsp_jarr), "recipes": $(printf '%s\n' "$RECIPES" | dsp_jarr), "config_sync": $(dsp_jval "$CONFIG_SYNC"), "config_split": $CONFIG_SPLIT},
+  "modules": {"contrib": $(printf '%s\n' "$CONTRIB" | dsp_jarr), "custom": $(printf '%s\n' "$CUSTOM_MODULES" | dsp_jarr), "patched": $(printf '%s\n' "$PATCHED" | dsp_jarr)},
+  "features": {"multisite": $MULTISITE, "multilingual": $MULTILINGUAL, "content_moderation": $MODERATION, "workspaces": $WORKSPACES, "search": $(dsp_jstr "$SEARCH"), "queue": $(dsp_jstr "$QUEUE"), "cron": $(dsp_jstr "$CRON"), "database": $(dsp_jstr "$DBTYPE")},
+  "quality": {"phpcs_config": $(dsp_jval "$PHPCS_CFG"), "phpstan_config": $(dsp_jval "$PHPSTAN_CFG"), "phpunit_config": $(dsp_jval "$PHPUNIT_CFG"), "composer_scripts": $(printf '%s\n' "$SCRIPTS" | dsp_jarr), "task_runner": $(dsp_jval "$MAKE"), "ci": $(dsp_jstr "$CI"), "eslint": $ESLINT, "stylelint": $STYLELINT},
+  "frontend": {"package_manager": $(dsp_jstr "$PM"), "build": $(dsp_jstr "$BUILD"), "sdc": $SDC},
+  "testing_frameworks": $(printf '%s\n' $TF | dsp_jarr),
+  "mcp": {"configured_servers": $(printf '%s\n' "$MCP_SERVERS" | dsp_jarr), "fingerprint_hints": $(printf '%s\n' $MCP_HINTS | dsp_jarr)},
+  "agent_skills": {"project": $(printf '%s\n' "$AS_PROJECT" | dsp_jarr), "vendor": $(printf '%s\n' "$AS_VENDOR" | dsp_jarr)},
+  "deployment": {"hints": $(printf '%s\n' "$DEPLOY" | dsp_jarr)}
+}
+EOF
+)
+mkdir -p "$(dirname "$CACHE")" 2>/dev/null && { printf '%s\n' "$J" > "$CACHE"; printf '%s' "$STAMP" > "$CACHE.stamp"; } || true
+
+if [ $SUMMARY -eq 1 ]; then
+  RC=$(printf '%s' "$ROUTER" | sed 's/.*"class":"\([^"]*\)".*/\1/'); RN=$(printf '%s' "$ROUTER" | sed -n 's/.*"note":"\([^"]*\)".*/\1/p')
+  printf 'Drupal %s (%s, %s) · PHP %s · kind %s · docroot %s\n' "${DRUPAL_VERSION:-unknown}" "$RC" "$DRUPAL_SOURCE" "${PHP_CONSTRAINT:-?}" "$PKIND" "$DOCROOT"
+  printf 'custom modules: %s\n' "$(echo $CUSTOM_MODULES | tr '\n' ' ')"
+  printf 'config: %s%s · ci: %s · tests: %s · lint: %s%s\n' "${CONFIG_SYNC:-none}" "$( $CONFIG_SPLIT && echo ' (config_split)')" "$CI" "${TF:-none}" "${PHPCS_CFG:-none}" "${PHPSTAN_CFG:+ + $PHPSTAN_CFG}"
+  [ -n "$SCRIPTS" ] && printf 'composer scripts: %s\n' "$(echo $SCRIPTS | tr '\n' ' ')"
+  if [ -n "$(echo $MCP_HINTS $MCP_SERVERS)" ]; then printf 'mcp servers: %s · hints:%s\n' "$(echo $MCP_SERVERS)" "$(echo " $MCP_HINTS")"; fi
+  [ -n "$RN" ] && printf 'router note: %s\n' "$RN"
+else
+  printf '%s\n' "$J"
+fi

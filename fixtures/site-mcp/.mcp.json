@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "drupal": {
+      "command": "python3",
+      "args": [
+        "${DRUPAL_SP_FIXTURES}/mcp-stub/server.py"
+      ]
+    }
+  }
+}
