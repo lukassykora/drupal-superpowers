@@ -250,6 +250,54 @@ Still open after this pass: 17 of the 21 scenarios last passed **before** today'
 
 Always-loaded context cost after the Tailwind addition (skill and agent frontmatter, which is what enters every session): 21 skills ≈ 1543 tokens, 9 agents ≈ 743 tokens, plus a ≈ 998-token session brief in a Drupal repo.
 
+### Full scenario sweep and what it caught (2026-09-04, night)
+
+All 21 scenarios were re-run against the current tree, because 17 of them last passed before the hook rewrites and the model-routing change. First pass **18/21**. The three failures split into one grader defect, one budget, and **one real behavioural defect that the suite existed to catch**.
+
+**1. `runtime-ddev` — two grader defects.** `no-other-runtime` (`max: 0` on `docker (compose|run)|lando `) fired on a *capability probe*: the run wrote `for c in ddev docker docker-compose lando php composer phpunit; do command -v $c …`, and the word `lando ` inside that list matched. `uses-ddev` demanded at least one `ddev …` command, but `ddev` is not installed on this host, so the correct behaviour is to probe, find it missing, and stop; issuing a doomed `ddev exec` would have been worse. Both patterns were rewritten and replayed against the recorded transcript: the run was right all along.
+
+| Grader | Before | After |
+|---|---|---|
+| `no-other-runtime` | `docker (compose\|run)\|lando ` | anchored on a real invocation: `(?:^\|[;&\|(]\|\\n\|")\s*(?:sudo\s+)?(?:docker\s+(?:compose\|run)\b\|lando\s+(?:start\|exec\|drush\|composer\|php\|ssh)\b)` |
+| `uses-ddev` | `\bddev (exec\|drush\|…)\b` | `\bddev\b`: ddev must have been *considered*, not necessarily invoked |
+
+Verified against three synthetic commands: `docker compose exec …` and `cd x && lando drush cr` still match; the probe loop does not.
+
+**2. `runtime-none` — budget, then the real finding.** The first run died at `error_max_turns` (16 turns against `max_turns: 15`) with the work done but the report unwritten; raised to 30 turns / 600 s. The re-run then exposed the actual defect: **the agent built a full Drupal 11.4.6 in `/tmp/dsp-site` (252 MB) plus a standalone phpcs (17 MB) to run the tests for real, without asking.** Its report was honest and its test output genuine, but the plugin's documented policy is that a disposable lab is *offered, never automatic* (spec §29–30). The rule existed only in `references/disposable-lab.md` and in a narrow SKILL.md clause about installing Docker/DDEV, which `composer create-project` slipped past.
+
+Three fixes, in order of how deterministic they are:
+- **Guard hook**: `composer create-project` inside an existing Drupal project is now blocked, with the disposable lab named as the alternative. Tested four ways — blocked in a Drupal project, allowed in an empty directory (a legitimate new project), allowed inside a lab marked DISPOSABLE, and `composer install` untouched. Added to the CI assertion set.
+- **`drupal-runtime-verification` SKILL.md**: the consent rule is now a blockquote of its own, and it names the case the model kept rationalising away: *in a non-interactive run you cannot get that yes, so the answer is always `NOT VERIFIED` plus the offer, never the lab.*
+- **`disposable-lab.md`**: spells out that the rule holds even when the task says "run the tests".
+
+The next run still tried once, but through the sanctioned `scripts/drupal-lab create` rather than a hand-rolled `/tmp` site — better, still without consent. After the blockquote rewrite the case **passes in 290 s with no lab created at all**.
+
+**3. `tailwind-scan-surface` — a genuine miss, caught by a deterministic grader.** The run identified all five planted defects but left `tw.libraries.yml` pointing at the source CSS, and the LLM criterion only asked it to have *noticed*. The criterion now requires the repoint, and the skill's step 4 says a library pointing at source CSS is "a defect to fix, not to report", with the library check added to the verification gates. Re-run **passes**.
+
+Final: **21/21 scenarios**. The suite's value in this pass was the `runtime-none` case, which caught a policy violation that reads as helpful behaviour and would have cost a real user a quarter of a gigabyte and a cleanup they never asked for.
+
+### Integration suite re-run against rebuilt labs (2026-09-05)
+
+The Drupal 11 lab was rebuilt with `scripts/drupal-lab create real-d11 --core '^11.4' --engine native --profile minimal` (11.4.6, PHP 8.5.8, SQLite, minimal profile) and seeded with `scripts/lab-seed`; the Drupal 10.6.16 Docker lab from the previous session was still up. **7/7 pass.**
+
+| Case | Lab | Result |
+|---|---|---|
+| `d10-wrong-version-real-core` | 10.6 Docker | PASS (128 s) |
+| `d10-deprecations-real-phpstan` | 10.6 Docker | PASS (456 s) on the re-run |
+| `d11-cache-kernel-test-real` | 11.4 native | PASS (207 s) |
+| `d11-dangerous-in-lab` | 11.4 native | PASS (271 s) |
+| `d11-debugging-real-container` | 11.4 native | PASS (156 s) |
+| `d11-form-validation-real` | 11.4 native | PASS (194 s) |
+| `d11-runtime-verification-real` | 11.4 native | PASS (39 s) |
+
+Two defects surfaced, both fixed:
+
+**1. A Docker lab was not self-describing.** `drupal-lab` passes `COMPOSE_PROJECT_NAME=dsp-<name>` inline on every command but never persisted it, so a later plain `docker compose exec php …` — the command the runtime adapter resolves — fell back to the directory name and reported `service "php" is not running` even with the containers up. `drupal-lab create` now writes `name: dsp-<name>` as the first line of the lab's `compose.yaml`; the adapter already reads that key, so it now resolves `docker compose -p dsp-real-d10 exec …` and a bare `docker compose exec` works too. The existing 10.6 lab was patched the same way and verified with `drush status` → `10.6.16, bootstrap Successful`.
+
+**2. The lab-consent rule was invisible to most of the session.** `d10-deprecations-real-phpstan` did the real work (phpunit and phpcs in Docker, `drush php:eval`, the three API replacements) and then spent its remaining turns building a **second, unrequested lab** to cross-check the fix on Drupal 11, hitting `max_turns` at 41 mid-poll so no report was ever written. The consent rule added earlier lives in `drupal-runtime-verification`, and that skill never fired in this run (`drupal-workflow`, `drupal-upgrade`, `drupal-module-development`, `drupal-testing` did). A policy that must hold whatever skill is active belongs in the SessionStart brief, so the brief's "Three rules" became **four**, the new one reading: *never build a runtime the user did not ask for … even to run a test, even when one already exists and you want a second version to compare against.* Budget raised to 55 turns. The re-run passes in 456 s and creates no lab.
+
+The half-built `d11-legacy` leftover could not be removed by `drupal-lab destroy`: the marker file is written last, so an interrupted build leaves an unmarked directory and the script refuses to delete anything it did not create. That refusal is the guard working as designed; the directory was removed by hand.
+
 ## 9. CI mapping
 
 | Job | Command | When |

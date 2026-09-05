@@ -75,6 +75,7 @@ for seg in "${segs[@]}"; do
   elif m "^git +reset +--hard"; then reason="git reset --hard discards uncommitted work"
   elif m "^git +clean +-[a-z]*f"; then reason="git clean -f deletes untracked files"
   elif m "^git +push .*(--force( |$)|-f( |$)| \+[A-Za-z0-9_./-])" && ! m "force-with-lease"; then reason="force push rewrites shared history (use --force-with-lease if you must)"
+  elif m "^composer +create-project" && [ "$KIND" != "none" ]; then reason="composer create-project inside an existing Drupal project builds a second, unrequested site (offer a disposable lab and use scripts/drupal-lab create once the user agrees)"
   elif m "^composer +(update|upgrade|up|u)( |$)"; then
     pk=$(printf '%s' "$seg" | sed -E 's/^composer +(update|upgrade|up|u)//; s/ --?[A-Za-z][A-Za-z0-9-]*(=[^ ]*)?//g; s/ +//g')
     if [ -z "$pk" ] && ! m '(^| )--dry-run( |$)'; then reason="unbounded composer update changes every dependency (name the packages, or use --dry-run)"; fi

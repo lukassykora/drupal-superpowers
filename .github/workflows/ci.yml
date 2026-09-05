@@ -37,10 +37,10 @@ jobs:
           guard() { rc=0; printf '{"cwd":"%s","tool_input":{"command":%s}}' "$PWD/fixtures/$1" "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$2")" \
             | CLAUDE_PLUGIN_ROOT=$PWD bash hooks/scripts/guard-bash >/dev/null 2>&1 || rc=$?; echo "$rc"; }
           fail=0
-          for c in "drush site:install -y" "bash -c 'drush sql:drop'" "git -C /r reset --hard" "rm --recursive --force web" "composer -n update" "drush cim --diff -y"; do
+          for c in "drush site:install -y" "bash -c 'drush sql:drop'" "git -C /r reset --hard" "rm --recursive --force web" "composer -n update" "drush cim --diff -y" "composer create-project drupal/recommended-project:^11.4 /tmp/x"; do
             [ "$(guard site-prodlike "$c")" = 2 ] || { echo "NOT BLOCKED: $c"; fail=1; }
           done
-          for c in "drush cim --diff --no" "composer update drupal/core -W" "drush config:status" "git push --force-with-lease origin f" "git commit -m x"; do
+          for c in "drush cim --diff --no" "composer update drupal/core -W" "drush config:status" "git push --force-with-lease origin f" "git commit -m x" "composer install"; do
             [ "$(guard site-prodlike "$c")" = 0 ] || { echo "WRONGLY BLOCKED: $c"; fail=1; }
           done
           printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"replace_all":false,"file_path":"/p/web/modules/custom/foo/foo.module"}}]}}\n{"role":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}\n' > /tmp/t.jsonl

@@ -26,6 +26,7 @@ Blocks with exit 2 and a reason, outside `DISPOSABLE`:
 - `rm -rf` on the project root, `/`, `~`, `.`, or `*`
 - `git reset --hard`, `git clean -f`, `git push --force`
 - unbounded `composer update`
+- `composer create-project` inside an existing Drupal project (a self-built scratch site the user did not ask for)
 
 Wrappers are normalised first, so `ddev drush …`, `lando drush …`, `docker compose exec php vendor/bin/drush …` and `vendor/bin/drush …` all match. The list lives in `hooks/scripts/guard-bash` and is exercised by `evals/scenarios/dangerous-env`.
 

@@ -1,6 +1,6 @@
 # Disposable Drupal lab
 
-An isolated, throw-away Drupal environment for module development, bug reproduction, API experiments, upgrade trials, or browser verification when the project has no runnable environment. **Offered, never created automatically.** Suggested wording:
+An isolated, throw-away Drupal environment for module development, bug reproduction, API experiments, upgrade trials, or browser verification when the project has no runnable environment. **Offered, never created automatically.** That holds even when creating one would clearly help and even when the task says "run the tests": the user pays for it in disk, time and cleanup, so the decision is theirs. In a non-interactive run there is no way to ask, so do not create one at all; report `NOT VERIFIED` and make the offer. Suggested wording:
 
 > Runtime verification is NOT VERIFIED here (no DDEV/Lando/Docker runtime, no vendor/). I can create a disposable DDEV/Docker Drupal environment under the plugin data directory to run the tests and the site for real. Want me to?
 

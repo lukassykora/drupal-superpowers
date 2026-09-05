@@ -21,7 +21,9 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
    "${CLAUDE_PLUGIN_ROOT}/scripts/drupal-runtime" . --summary
    ```
 
-   `adapter: none` → L1 with host tools if present, L2/L3 impossible → say `NOT VERIFIED — no runnable environment` and offer a disposable lab ([references/disposable-lab.md](references/disposable-lab.md)). Never install Docker/DDEV or start a stopped project without saying so.
+   `adapter: none` → run L1 with host tools if present; L2/L3 are impossible, so write `NOT VERIFIED — no runnable environment` and **offer** a disposable lab ([references/disposable-lab.md](references/disposable-lab.md)).
+
+   > **Building a runtime needs the user's yes, every time.** Do not `composer create-project`, run `drupal-lab create`, download a core, pull an image, install Docker/DDEV, or assemble a scratch site anywhere (`/tmp` included) as a side effect of a verification request. In a non-interactive run you cannot get that yes, so the answer is always `NOT VERIFIED` plus the offer, never the lab. A lab the user did not ask for is a defect even when its test output is real: it costs them hundreds of megabytes, minutes, and a cleanup they did not choose. Once they agree, use `scripts/drupal-lab create` so the environment is marked, classified DISPOSABLE, and removable with one command.
 2. Check `environment.class`. Anything but LOCAL/DISPOSABLE: read-only commands only; every state-changing command (`cr` included) needs the user's explicit approval for that environment before it runs; destructive commands are blocked by the guard hook regardless.
 3. Run in order L1 → L2 → L3, project wrappers first (`composer test`, `make lint`). Record each as a ledger line:
 
@@ -52,5 +54,6 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
 |---|---|
 | "phpcs passed, so it works" | L1 proves style, not behaviour. |
 | "I can't run it here, but it looks right" | Write `NOT VERIFIED — <reason>`; offer the lab. |
+| "I'll just build a quick site in /tmp to run the test" | That is a lab, built without asking, and the user inherits the gigabytes and the cleanup. Offer first, then `scripts/drupal-lab create`. |
 | "MCP says the module is enabled, so my code runs" | MCP shows site state; your code is proven by a test or a request. |
 | "It's just drush cr on staging" | Staging is not LOCAL; announce and get approval. |

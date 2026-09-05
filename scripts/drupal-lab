@@ -63,6 +63,9 @@ cmd_create() {
     docker)
       cp "$DSP_ROOT_DIR/fixtures/lab-compose/compose.yaml" "$dir/compose.yaml"
       [ -n "$php" ] && sed -i.bak "s/php:8.3-cli/php:${php}-cli/g" "$dir/compose.yaml" && rm -f "$dir/compose.yaml.bak"
+      # Pin the project name in the file itself. Without it a later plain "docker compose exec" (the
+      # command the runtime adapter resolves) falls back to the directory name and finds no services.
+      printf 'name: dsp-%s\n' "$name" | cat - "$dir/compose.yaml" > "$dir/compose.yaml.tmp" && mv "$dir/compose.yaml.tmp" "$dir/compose.yaml"
       ( cd "$dir" && COMPOSE_PROJECT_NAME="dsp-$name" docker compose up -d ) || die "docker compose up failed"
       echo "waiting for the php service to install its extensions (first start takes a few minutes)"
       local i=0; while [ $i -lt 120 ]; do ( cd "$dir" && COMPOSE_PROJECT_NAME="dsp-$name" docker compose exec -T php test -f /tmp/.dsp-ready ) 2>/dev/null && break; sleep 5; i=$((i+1)); done
