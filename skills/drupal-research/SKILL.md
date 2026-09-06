@@ -41,6 +41,7 @@ Not for: reading the project's own custom code (just read it), or well-known bas
 - Version drift: a change record for 11.x does not apply to a 10.6 project; run `drupal-facts check` before quoting it.
 - Contrib API: read the contrib module's source in `vendor/` or `modules/contrib/`, not its project page.
 - Long reads (many core files, several change records) go to the `drupal-researcher` agent, which returns ≤ 30 lines of evidence.
+- **One pass per task.** Collect the APIs first, verify them in one `drupal-lookup` round or one researcher dispatch, record the `API:` lines, and move on. Without installed core, do not substitute the web API by API: mark `NOT VERIFIED` and list them for the implementer; the web confirms a branch, never this checkout.
 
 ## Works with process skills
 

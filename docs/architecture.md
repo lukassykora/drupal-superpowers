@@ -43,7 +43,7 @@ drupal-superpowers/
 │   └── marketplace.json         single-entry dev marketplace for local install
 ├── skills/
 │   ├── drupal-project-understanding/   SKILL.md, references/profile-fields.md
-│   ├── drupal-workflow/                SKILL.md, references/global-constraints-template.md, references/plan-task-template.md
+│   ├── drupal-workflow/                SKILL.md, references/global-constraints-template.md, references/plan-task-template.md, references/writing-plans.md
 │   ├── drupal-research/                SKILL.md, references/source-hierarchy.md, references/core-patterns-index.md
 │   ├── drupal-architecture/            SKILL.md, references/decision-tables.md, references/design-review-checklist.md
 │   ├── drupal-module-development/      SKILL.md, references/{services,plugins,routing,forms,entities,hooks,config-files}.md
@@ -113,10 +113,11 @@ user prompt
   ├─ Orient:      drupal-project-understanding (profile + runtime), version router class
   ├─ Understand:  read existing code on the execution path (never edit by filename)
   ├─ Research:    drupal-research → drupal-lookup (installed core → Code Query → change records → docs)
-  ├─ Design:      drupal-architecture decision tables + design-review checklist (only relevant rows)
+  ├─ Design:      drupal-architecture decision tables + design-review checklist (only relevant rows; the security/cacheability/config skills load later, at Implement, per file class)
   ├─ Test plan:   drupal-testing picks the cheapest proving layer
+  ├─ Plan:        architectural class or on request: drupal-workflow/references/writing-plans.md (read every touched file and core API first; real code per task; docs/plans/)
   ├─ Implement:   drupal-module-development / drupal-config / … ; PostToolUse lint on PHP edits
-  ├─ Verify:      drupal-runtime-verification: L1 static → L2 automated → L3 live; PreToolUse guard on Bash
+  ├─ Verify:      drupal-runtime-verification: L1 static → L2 automated → L3 live (expected on LOCAL/DISPOSABLE with a running adapter: references/live-verification.md); PreToolUse guard on Bash
   ├─ Review:      drupal-code-review / drupal-security-reviewer agent for non-trivial changes
   └─ Gate:        drupal-verification builds the evidence report; Stop hook nags if evidence is missing
 ```
@@ -273,8 +274,10 @@ Standalone: `drupal-workflow` supplies the compact process (§5.8) and says in i
 | Class | Signals | Phases |
 |---|---|---|
 | **trivial** | single file, no PHP logic change, no config schema, no access/permission strings, no new route/service | Orient (cached profile) → Implement → L1 → two-line report |
-| **bounded** | one module, existing patterns, no new entity type/integration/auth, ≤ ~3 files | Orient → Understand → Research (only unfamiliar API) → Test plan → Implement → L1 + L2 → Gate |
-| **architectural** | new entity/config type, external integration, auth/permissions model, migration, upgrade, cross-module behaviour, or user says "design"/"architecture" | full §4 pipeline incl. design review, independent review, L3 when possible |
+| **bounded** | one module, existing patterns, no new entity type/integration/auth, ≤ ~3 files | Orient → Understand → Research (only unfamiliar API) → (Plan only on request) → Test plan → Implement → L1 + L2 → Gate |
+| **architectural** | new entity/config type, external integration, auth/permissions model, migration, upgrade, cross-module behaviour, or user says "design"/"architecture" | full §4 pipeline incl. design review, written plan, independent review, L3 when possible |
+
+A plan-only request ("write the plan, do not implement") stops after the Plan phase. Standalone the plan follows `drupal-workflow/references/writing-plans.md`, the Drupal counterpart of `superpowers:writing-plans` (measured 2026-09-06 with `scenarios/plan-real-code`): every file the plan modifies is read first with line ranges, every API is located in the installed core or marked `NOT VERIFIED`, each task carries the test code, the implementation code, and the resolved commands, the document lives in `docs/plans/` (never under `web/`), and no task commits. With Superpowers present, `writing-plans` owns the document shape and these rules feed its Global Constraints and task blocks.
 
 The class can be raised mid-task when evidence appears (e.g. a "label change" turns out to touch a permission), never silently lowered.
 
@@ -293,7 +296,7 @@ Common rules (from the writing-skills findings): frontmatter `name` + `descripti
 | Skill | Status | Trigger moment (description intent) | `paths` gate | User-invocable | Key references |
 |---|---|---|---|---|---|
 | `drupal-project-understanding` | MVP | first non-trivial task in a repo containing `composer.json` with `drupal/core`, or when facts about version/paths/runtime are needed; before proposing approaches | — | `/…:understand-project` | profile-fields |
-| `drupal-workflow` | MVP | any Drupal change request when no Superpowers process skill is active; classifies complexity | — | no | global-constraints-template, plan-task-template |
+| `drupal-workflow` | MVP | any Drupal change request when no Superpowers process skill is active; classifies complexity | — | no | global-constraints-template, plan-task-template, writing-plans |
 | `drupal-research` | MVP | when unsure whether a Drupal API/hook/service/method exists or how core implements a pattern; before writing code that calls an unfamiliar API | — | no | source-hierarchy, core-patterns-index |
 | `drupal-architecture` | MVP | designing how a feature should be built on Drupal: service vs plugin, hook vs event, config vs content entity, state vs config, queue vs sync, core vs contrib vs custom; during design, before a plan exists | — | no | decision-tables, design-review-checklist |
 | `drupal-module-development` | MVP | creating or changing a custom module: `.info.yml`, `.services.yml`, `.routing.yml`, `.permissions.yml`, plugins, controllers, forms, entity types, update hooks | `**/modules/custom/**`, `*.info.yml` | no | services, plugins, routing, forms, entities, hooks, config-files |

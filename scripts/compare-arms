@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# compare-arms: run the same eval cases in three arms and print one comparison table.
+#   plugin       claude -p --plugin-dir .              (this plugin only, no user settings)
+#   superpowers  claude -p --with-user-settings         (the user's plugins, typically Superpowers; no drupal plugin)
+#   both         claude -p --plugin-dir . --with-user-settings
+# Usage: scripts/compare-arms [--model M] [--runs N] [--arms plugin,superpowers,both] <run-evals selectors...>
+#   e.g. DSP_LAB_DDEV=~/labs/ddev-a scripts/compare-arms --tag ddev
+#        scripts/compare-arms --group scenarios --case plan-real-code --runs 2
+# Results: evals/results/compare-<stamp>/{plugin,superpowers,both}.json and summary.md.
+# The arms run sequentially on purpose: integration cases share one project directory.
+set -u
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+MODEL=""; RUNS=1; ARMS="plugin,superpowers,both"; SEL=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL=${2:-}; shift 2;;
+    --runs) RUNS=${2:-1}; shift 2;;
+    --arms) ARMS=${2:-}; shift 2;;
+    *) SEL+=("$1"); shift;;
+  esac
+done
+[ ${#SEL[@]} -gt 0 ] || { sed -n 2,11p "$0"; exit 1; }
+STAMP=$(date +%Y%m%d-%H%M%S); OUT="$ROOT/evals/results/compare-$STAMP"; mkdir -p "$OUT"
+for arm in ${ARMS//,/ }; do
+  case "$arm" in
+    plugin) extra=();;
+    superpowers) extra=(--baseline --with-user-settings);;
+    both) extra=(--with-user-settings);;
+    *) echo "unknown arm $arm"; exit 1;;
+  esac
+  echo "== arm $arm ($(date +%H:%M))"
+  "$ROOT/scripts/run-evals" "${SEL[@]}" --runs "$RUNS" ${MODEL:+--model "$MODEL"} "${extra[@]}" --json "$OUT/$arm.json" > "$OUT/$arm.log" 2>&1
+  grep -E '^\[(PASS|FAIL|SKIP)' "$OUT/$arm.log" | cut -c1-160
+done
+python3 - "$OUT" <<'PY'
+import json,sys,os,glob
+out=sys.argv[1]; arms=[os.path.basename(p)[:-5] for p in sorted(glob.glob(out+'/*.json'))]
+rows={}
+for arm in arms:
+    d=json.load(open(f'{out}/{arm}.json'))
+    for r in d['results']:
+        for run in r['runs']:
+            ok=all(g['ok'] for g in run['graders'] if g['ok'] is not None)
+            failed=[g['grader'] for g in run['graders'] if g['ok'] is False]
+            rows.setdefault(r['case'],{})[arm]=f"{'PASS' if ok else 'FAIL'} {run['seconds']:.0f}s {len(run['tools'])} calls" + (f" ({', '.join(failed)})" if failed else '')
+lines=['| case | '+' | '.join(arms)+' |','|---|'+'---|'*len(arms)]
+for case,by in rows.items(): lines.append('| '+case+' | '+' | '.join(by.get(a,'—') for a in arms)+' |')
+open(out+'/summary.md','w').write('\n'.join(lines)+'\n'); print('\n'.join(lines)); print('results:',out)
+PY

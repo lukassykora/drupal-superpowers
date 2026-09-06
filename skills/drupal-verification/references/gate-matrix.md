@@ -15,6 +15,8 @@ Rows are classes of changed files; columns are gates. `req` = required (PASS/FAI
 | tests only | req | req | — | req | opt | req (they run) | — | — | — | — | — | — | — |
 | migrations YAML / process plugins | req | req | req | yml lint | req | req (migrate kernel) | req | — | — | — | opt | — | req |
 
+`opt` for Live (L3) becomes **req** when `drupal-runtime` reports a running adapter on a LOCAL or DISPOSABLE environment and the change has user-visible behaviour (a route, form, block, or template): the report then carries the L3 ledger lines from `drupal-runtime-verification/references/live-verification.md`, or `NOT VERIFIED` with the concrete blocker.
+
 Independent review (`drupal-code-reviewer` / `drupal-security-reviewer`) is required for architectural changes and for any row with a required security or access gate touched by more than a trivial edit; otherwise optional.
 
 Report statuses: `PASS` (command ran, result confirms), `FAIL` (command ran, result contradicts), `NOT VERIFIED — <reason>` (could not run), `NOT APPLICABLE` (gate does not apply to this change), `NOT DONE` (review not performed).

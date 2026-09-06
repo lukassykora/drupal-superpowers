@@ -36,7 +36,7 @@ Not for: three-line bugfixes, label changes, bounded changes inside an existing 
 
 ## Works with process skills
 
-If `superpowers:brainstorming` is active, use this skill while exploring approaches and presenting the design; it does not replace the approval gate. If `superpowers:writing-plans` is active, put the chosen mechanisms and the design-review outcomes into the plan's Global Constraints. Standalone, this is phase 4 of `drupal-workflow`.
+If `superpowers:brainstorming` is active, use this skill while exploring approaches and presenting the design; it does not replace the approval gate. If `superpowers:writing-plans` is active, put the chosen mechanisms and the design-review outcomes into the plan's Global Constraints. Standalone, this is phase 4 of `drupal-workflow`; when the deliverable is a plan or a hand-off document rather than code, continue from step 6 with the Plan phase in `drupal-workflow/references/writing-plans.md` (read every file the plan touches, locate each API in the installed core, real test and implementation code per task, `docs/plans/`).
 
 ## Red flags
 

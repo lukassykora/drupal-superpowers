@@ -18,6 +18,8 @@ Status: **0.2.0, MVP + Phase 2 (frontend, performance, Migrate API, legacy/front
 | Verifies at three levels and says which ran | L1 static, L2 Drupal automated, L3 live; every claim is `PASS`, `FAIL`, `NOT VERIFIED — reason`, or `NOT APPLICABLE` |
 | Runs safely | A PreToolUse guard blocks `drush sql:drop`, `site:install`, `cim -y`, `entity:delete`, destructive SQL, `git reset --hard`, unbounded `composer update` outside disposable environments |
 | Knows the front end, Tailwind included | Twig, libraries, `Drupal.behaviors`, SDC and accessibility in `drupal-frontend`; the Tailwind pipeline in `drupal-tailwind` — `@source` globs that reach `components/` and `*.theme`, safelists for classes Twig builds at render time, Preflight versus the admin UI and CKEditor 5, and what Drupal's CSS aggregation does to a layered `@import` |
+| Writes plans made of real code | Standalone Plan phase (`drupal-workflow/references/writing-plans.md`): every file the plan touches is read first, every API is located in the installed core (`web/core/...php:line`) or marked `NOT VERIFIED`, each task carries its test code, implementation code and the resolved commands, the document lives in `docs/plans/` and no task commits; with Superpowers present, `writing-plans` keeps the document shape and these rules feed it |
+| Verifies live on local runtimes | On DDEV, Lando, Compose or a disposable lab that is running, user-visible changes are exercised against the site as anonymous / without / with permission, with a two-user cache check and log read, through the feature's own routes (never hand-written rows) |
 | Works with or without Superpowers | With Superpowers installed, its process skills run first and Drupal skills supply the domain knowledge inside them; standalone, `drupal-workflow` provides a compact process |
 | Uses Drupal MCP when present, never depends on it | Fingerprint-based detection of MCP Tools, MCP Server 2.x, drush-mcp and others; read-only first; shell-equivalent tools get the Bash guard's rules |
 
@@ -63,7 +65,7 @@ Twenty-one capability skills (short `SKILL.md`, detail in `references/`), nine a
 
 ## Superpowers interoperability
 
-Superpowers (obra/superpowers) is optional. When present, its `brainstorming`, `systematic-debugging`, `writing-plans`, `test-driven-development`, and `verification-before-completion` run first (their own priority rule); Drupal skills are consulted inside those steps and feed a Drupal "Global Constraints" block into plans so that Superpowers' implementer and reviewer subagents follow Drupal rules. Nothing here duplicates a Superpowers process skill or injects a second bootstrap.
+Superpowers (obra/superpowers) is optional. When present, its `brainstorming`, `systematic-debugging`, `writing-plans`, `test-driven-development`, and `verification-before-completion` run first (their own priority rule); Drupal skills are consulted inside those steps and feed a Drupal "Global Constraints" block into plans so that Superpowers' implementer and reviewer subagents follow Drupal rules. Nothing here duplicates a Superpowers process skill or injects a second bootstrap. Measured on a real DDEV project (Drupal 11.4, `docs/evals.md` §8): with both installed, exactly one process skill owns each task (`brainstorming` → `writing-plans` for a plan request, `drupal-workflow` for an implementation); Superpowers alone solves a bounded implementation as well and faster, the plugin adds the evidence shape (reviewer verdict, phpstan, gate lines, live L3) and the Drupal rules that a plan or a fix on a version-specific API needs. `scripts/compare-arms` re-measures that claim.
 
 ## Runtime support
 
@@ -113,6 +115,8 @@ scripts/run-evals --dry-run           # list cases
 scripts/run-evals --group trigger --group no-trigger --no-llm --runs 1   # PR gate
 scripts/run-evals --group scenarios --case cache                        # one scenario with LLM graders
 scripts/run-evals --baseline ...      # the no-plugin arm
+scripts/compare-arms --group scenarios --case plan-real-code           # plugin / Superpowers-only / both, one table
+DSP_LAB_DDEV=~/labs/x scripts/compare-arms --tag ddev                 # same on a real DDEV project
 ```
 
 Evals: [docs/evals.md](docs/evals.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Attribution for adapted ideas: [ATTRIBUTION.md](ATTRIBUTION.md).

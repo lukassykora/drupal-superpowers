@@ -35,7 +35,8 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
    Full level definitions in [references/levels.md](references/levels.md).
 4. **MCP present?** Look at your tool list for Drupal MCP fingerprints (`get_site_status`, `mcp_tools_list_available`, `tool_api__*`, `drupal_status`, `drupal_introspect`, `info`+`status`, `site_info`). Map them with [references/mcp-capabilities.md](references/mcp-capabilities.md): read-only tools may be called freely for introspection; write tools only with the same approval as the equivalent drush command; `drupal_drush`, `drupal_php_eval`, `drupal_sql_query`, `ddev_exec` are shell-equivalent and fall under the guard's rules. MCP never replaces the repository as the source of truth for code.
 5. **Browser** ([references/browser.md](references/browser.md)): use the project's framework (Playwright, Nightwatch, Cypress) or the available browser tools for login, permissions, forms, AJAX, redirects, error pages; capture console errors, failed requests, HTTP status, and watchdog entries. Browser evidence supplements PHPUnit; it does not replace it.
-6. Read logs after L3: `drush watchdog:show --count=20 --severity=Error`, container/web server logs, browser console.
+6. **L3 on LOCAL / DISPOSABLE with a running adapter is expected, not optional**, for any change with user-visible behaviour: enable the module, create test users with Drush, exercise the feature through its own route or form, request as anonymous / without permission / with permission, compare two users on personalised pages, then read logs. Recipe and ledger lines in [references/live-verification.md](references/live-verification.md). "The module is not enabled" is a step in that recipe, not a `NOT VERIFIED` reason; the state change (enabled module, `drush cex` pending) goes into the handoff.
+7. Read logs after L3: `drush watchdog:show --count=20 --severity=Error`, container/web server logs, browser console.
 
 ## Decision rules
 
@@ -57,3 +58,5 @@ description: Use when about to run drush, composer, php, phpunit, phpcs, phpstan
 | "I'll just build a quick site in /tmp to run the test" | That is a lab, built without asking, and the user inherits the gigabytes and the cleanup. Offer first, then `scripts/drupal-lab create`. |
 | "MCP says the module is enabled, so my code runs" | MCP shows site state; your code is proven by a test or a request. |
 | "It's just drush cr on staging" | Staging is not LOCAL; announce and get approval. |
+| "Enabling the module would create config drift, so L3 is NOT VERIFIED" | On LOCAL/DISPOSABLE, enable it, verify, and put `drush cex` in the handoff; drift is a note, not a blocker. |
+| "I'll insert a row to see the page" | Verify through the feature's own route or service; a hand-written row proves nothing about the code. |

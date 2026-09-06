@@ -1,6 +1,6 @@
 # Evals
 
-Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-04 (measured): **77 cases** (trigger 21, no-trigger 21, scenarios 21, agents 2, acceptance 5, integration 7), 164 graders, 9 fixtures + the compose lab recipe and the MCP stub.
+Stage 4 deliverable. The eval suite exists **before** any SKILL.md so that every skill's first version is measured against a baseline run without the plugin (spec §66–68, D9). Inventory as of 2026-09-06 (measured): **80 cases** (trigger 21, no-trigger 21, scenarios 22, agents 2, acceptance 5, integration 9), 186 graders, 9 fixtures + the compose lab recipe and the MCP stub.
 
 ## 1. Why evals come first
 
@@ -12,10 +12,10 @@ Skill descriptions are trigger surfaces; skill bodies shape behaviour. Neither c
 evals/
 ├── trigger/<skill>/              20 cases: the prompt MUST activate <skill>
 ├── no-trigger/<skill>/           20 cases: the prompt MUST NOT activate <skill>
-├── scenarios/<name>/             20 cases: 14 from spec §66 + frontend, performance, migrate, english-code, git-handoff, git-on-request
+├── scenarios/<name>/             22 cases: 14 from spec §66 + frontend, performance, migrate, english-code, git-handoff, git-on-request, tailwind-scan-surface, plan-real-code
 ├── agents/<name>/                 2 cases from spec §68
 ├── acceptance/<nn>-<name>/        5 cases from spec §84–88 (03 and 05 tagged p2)
-├── integration/                   in-place cases against a real project named by env DSP_LAB_D11 (Stage 8)
+├── integration/                   in-place cases against real projects named by env DSP_LAB_D11 / DSP_LAB_D10 / DSP_LAB_DDEV (Stage 8)
 └── results/                       runner output, git-ignored
 fixtures/                          synthetic projects, see fixtures/README.md
 ```
@@ -47,12 +47,12 @@ Users report that the "Greeting" block sometimes greets them with someone else's
 | `regex` | `pattern`, `match: contains \| not_contains`, `flags`, `scope: final (default) \| all \| results` | pattern (not) found in the final message, all assistant text, or assistant text plus tool results |
 | `file_exists` | `path` (glob, relative to the temp cwd), `min_files` (default 1) | at least `min_files` files match after the run |
 | `file_contains` | `path` (glob), `pattern` (regex), `match: contains \| not_contains`, `min_files` | the on-disk file content (not) matching after the run; preferred over tool-name graders because agents may edit via Bash. Set `min_files: 1` on every `not_contains` grader: an empty glob otherwise passes vacuously and proves nothing |
-| `llm` | body = criteria | a judge model answers PASS given transcript + criteria |
+| `llm` | body = criteria; optional `files` (globs handed to the judge as `files_on_disk`), `file_chars` (per-file cap, default 8000), `file_budget` (all files, default 120000) | a judge model answers PASS given transcript + criteria |
 | `tool_order` | `before`, `after` | reserved for Stage 5 cases (test written before implementation edit) |
 
 Skill activation is observed as a `Skill` tool call whose input matches `(drupal-superpowers:)?<skill>\b`. Trigger cases require `min: 1`; no-trigger cases require `max: 0`.
 
-The `fixture:` key is ours; `setup_script:` (single line or a `|` block) runs in the copied fixture before the agent starts, e.g. `git init` for the git scenario. Integration cases use `project_env: DSP_LAB_D11` (run in place in that directory, no copy) and `reset_script` (run before and after each run; re-seeds the fixture modules with `scripts/lab-seed` and uninstalls them). The `fixture:` key is ignored for those. When the native `claude plugin eval` becomes available on this account, a `scaffold_script` shim will copy the same fixture; nothing else in the format needs to change.
+The `fixture:` key is ours; `setup_script:` (single line or a `|` block) runs in the copied fixture before the agent starts, e.g. `git init` for the git scenario. Integration cases use `project_env: DSP_LAB_D11` (or `DSP_LAB_D10`, `DSP_LAB_DDEV`; run in place in that directory, no copy) and `reset_script` (run before and after each run; re-seeds the fixture modules with `scripts/lab-seed` and uninstalls them). The `fixture:` key is ignored for those. When the native `claude plugin eval` becomes available on this account, a `scaffold_script` shim will copy the same fixture; nothing else in the format needs to change.
 
 ## 4. Runner (`scripts/run-evals`, Stage 5)
 
@@ -60,7 +60,10 @@ The `fixture:` key is ours; `setup_script:` (single line or a `|` block) runs in
 scripts/run-evals [--group trigger|no-trigger|scenarios|agents|acceptance|integration]... [--case NAME]... [--tag T]...
                   [--runs N] [--no-llm] [--baseline] [--plugin-dir DIR] [--with-user-settings] [--model M]
                   [--json OUT] [--dry-run] [--keep-temp]
+scripts/compare-arms [--model M] [--runs N] [--arms plugin,superpowers,both] <the same selectors>
 ```
+
+`compare-arms` runs the selected cases three times, sequentially (integration cases share one project directory): `plugin` (this plugin, no user settings), `superpowers` (`--baseline --with-user-settings`: the user's own plugins, i.e. Superpowers, without this one), `both`. It prints one table with PASS/FAIL, seconds and tool calls per arm and saves it next to the three JSON files. Any statement of the form "better than Superpowers" in the docs must point at such a table.
 
 Per case and run:
 1. Copy `fixtures/<fixture>` to a fresh temp directory; export `DRUPAL_SP_FIXTURES=<abs path to fixtures/>` so `site-mcp/.mcp.json` resolves the stub server.
@@ -95,7 +98,7 @@ Cost control: `--group trigger --group no-trigger --no-llm --runs 1` is the PR g
 | `site-current/xss_notes` | `Markup::create()` around a query parameter (reflected XSS); route `_access: 'TRUE'` with no node access check; `\|raw` in Twig | `scenarios/security`, `trigger/drupal-security` |
 | `site-current/greeting_block` | per-user output without the `user` cache context | `scenarios/cache`, `acceptance/02`, `trigger/drupal-cacheability`, `agents/*` |
 | `site-current/broken_service` | `@entity.manager` (non-existent service) and class/namespace mismatch (`Service\Notifier` vs `src/Notifier.php`) | `scenarios/debugging`, `trigger/drupal-debugging` |
-| `site-current/saved_items` | clean; the repository ignores node access (used as the bug for `regression-test`) | `acceptance/01`, `scenarios/regression-test`, `scenarios/fake-api` |
+| `site-current/saved_items` | clean; the repository ignores node access (used as the bug for `regression-test`) | `acceptance/01`, `scenarios/regression-test`, `scenarios/fake-api`, `scenarios/plan-real-code` (plan-only: real code from the module, plan outside `web/`) |
 | `site-current/contact_note` | form without validation | `scenarios/runtime-none`, `acceptance/04` |
 | `site-previous/legacy_tools` | `format_size()`, `watchdog_exception()`, `system_time_zones()` (removed in Drupal 11), annotation-based Block | `scenarios/upgrade`, `scenarios/wrong-version`, `acceptance/03` |
 | `site-legacy-d7/legacy_d7` | D7 `hook_menu`, SQL concatenation, undocumented gold-tier rule, cron CSV import | `scenarios/legacy` |
@@ -298,6 +301,64 @@ Two defects surfaced, both fixed:
 
 The half-built `d11-legacy` leftover could not be removed by `drupal-lab destroy`: the marker file is written last, so an interrupted build leaves an unmarked directory and the script refuses to delete anything it did not create. That refusal is the guard working as designed; the directory was removed by hand.
 
+### Plan phase for `drupal-workflow` (2026-09-06)
+
+The standalone workflow had no equivalent of `superpowers:writing-plans`: the architectural pipeline went Design → Test plan → Implement and never produced a document. New case `scenarios/plan-real-code` (plan-only request on `saved_items`, fixture `site-current`, seven graders) was written first and run in three arms before the reference existed:
+
+| Arm | Result | What the plan looked like |
+|---|---|---|
+| `--baseline` (no plugin), 391 s | 0/7 (1/7 after a grader fix) | 687-line, well-argued document written **inside the module** (`web/modules/custom/saved_items/IMPLEMENTATION_PLAN.md`); tests as a bullet list in a final "Tests" section; execution order pointing back at design sections; no `NOT VERIFIED` mark in the document |
+| plugin, description only (no Plan phase), 568 s | 0/7 (1/7 after the grader fix) | `drupal-workflow` and ten domain skills fired; Global Constraints pasted; API checks done on api.drupal.org and honestly labelled; the plan still landed inside the module, tasks said "Write `SavedItemsRepositoryTest` (`KernelTestBase`, …)" and "implement §5.2" instead of carrying the code |
+| plugin with `references/writing-plans.md` + Plan phase, 30 turns | 6/7 | `docs/plans/2026-09-06-saved-items.md`, files read with line ranges, API table with `NOT VERIFIED against installed core`, Task 1 complete with test and implementation code; **ran out of the 30-turn budget** in Task 2 after ~20 web look-ups |
+| same, 50 turns / 30 min, 959 s | 7/7 (after two grader fixes) | 1914 lines, seven self-contained tasks (storage API → index + `hook_update_N` → teaser link via `hook_node_links_alter` + lazy builder → CSRF-protected save/remove routes → `/user/{user}/saved` with custom access → local task → cleanup hooks), each with Kernel/Functional test code before the implementation, resolved commands, deployment notes and a paste-ready commit; nothing under `web/` touched |
+| same reference, second run, 455 s | 0/7 | **no plan at all**: 51 turns spent on contrib usage statistics, release histories, a researcher dispatch, and then core files downloaded one by one from git.drupalcode.org ("let me pin down the ones my code blocks depend on directly from core source"); the budget sentence in §1 of the reference did not bind |
+| reference with the fixed order (write the file first with `NOT VERIFIED` marks, one verification pass over its API table afterwards), two concurrent runs, 1043 s and 1059 s | **7/7 and 7/7** | 39 and 61 tool calls; 1727-line plan with four tasks (run A), the second with more web confirmation but still inside the budget; both under `docs/plans/`, both untouched `web/` |
+
+Defects found by the case, all fixed: (1) `reads-existing-module` matched the full path, but agents read through `cd module && cat src/…`; now matches the class name. (2) `no-implementation` matched `web/modules/custom` anywhere in the tool input, so the plan's own content (which names module paths) counted as an edit; now anchored to `file_path`. (3) The `llm` grader hands the judge at most 8000 chars per file, so an 85 KB plan was judged on its header alone; `file_chars` / `file_budget` grader keys added to the runner (§3). (4) Criterion 6 demanded a test in every task; the plan's Task 2 (index + update hook) argued in one sentence that a test would exercise the database driver, which is the `drupal-testing` rule ("say why"); the criterion and the reference now allow a schema-only task to state the reason instead. (5) The behavioural defect the case then caught: a soft budget rule ("confirm on the web only the APIs a code block depends on") did nothing against the pull of the source-of-truth hierarchy when no core is on disk; the fix is structural order, not a caveat: the document is written before any web verification, and the verification pass is one walk over the finished API table. Budget lesson repeated from Stage 8: an architectural plan with contrib research needs 50 turns, the case says so in its runner note. `trigger/drupal-workflow` and `no-trigger/drupal-workflow` re-run after the body change: 2/2.
+
+### Real DDEV project and the Superpowers comparison (2026-09-06)
+
+First run on DDEV (the one runtime CLAUDE.md listed as untested). DDEV 1.25.4 was installed for it; two labs were built with `scripts/drupal-lab create … --engine ddev --profile standard` (Drupal 11.4.6, PHP 8.4 in the container), then made to look like a maintained project: `admin_toolbar`, `pathauto`, `token`, `devel`, the `article_content_type` core recipe (the 11.4 standard profile installed no content types through the lab's silent `site:install`; `ddev drush recipe:apply core/recipes/article_content_type` fixed it), 12 generated articles, `config/sync` outside the docroot, `SIMPLETEST_*` in `.ddev/config.yaml`, a root `phpunit.xml`, README, and three commits. Lab-creation defects found: two concurrent `ddev start` calls race on the mutagen download (`open ~/.ddev/bin/mutagen.tgz: no such file`), so labs are created one at a time now; `settings.ddev.php` overrides `config_sync_directory`, so the project convention has to be appended after the DDEV include.
+
+Two new integration cases (`ddev-plan-real-core`, `ddev-saved-list-real-test`, `project_env: DSP_LAB_DDEV`) were run in three arms with `scripts/compare-arms` semantics, same model (`claude-fable-5-1[1m]`), one lab per case so the arms never shared a working tree:
+
+| Case | plugin only | Superpowers only | both |
+|---|---|---|---|
+| plan (`ddev-plan-real-core`, 9 graders) | **7/9**, 500 s, 9 calls: read nine APIs in `web/core` (HookCollectorPass, Merge, Pager, CommentLazyBuilders …), ddev commands, honest gate; but `drupal-workflow` did not fire on "Plan the feature", so the plan had prose tests at the end and no task structure, and it cited core in the final message instead of the document | **9/9**, 1113 s, 65 calls: `writing-plans`, verified in installed core, ddev commands, one design finding the plugin arm missed (Olivero's teaser template does not print `links`) | interrupted after 13 calls by the account's spend limit (`brainstorming` → `writing-plans` → `drupal-architecture`; `drupal-workflow` correctly silent); 8/9 deterministic graders passed on the partial document |
+| implement (`ddev-saved-list-real-test`, 6 graders) | **6/6**, 649 s, 44 calls: `ddev exec vendor/bin/phpunit` `OK (7 tests, 149 assertions)`, `_custom_access`, node access filter, `user` context, phpstan, `drupal-security-reviewer` verdict, structured gate, git handoff; live check reported `NOT VERIFIED` "enabling the module would create config drift" | **6/6**, 289 s, 20 calls: `brainstorming` + `test-driven-development`, red → green through ddev `OK (5 tests, 70 assertions)`, phpcs, **and a live 403/200 check on the running site** (by inserting and deleting a row by hand) | interrupted by the spend limit during the final phpcs/phpstan pass; before that red `Tests: 4, Failures: 4` → green `OK (4 tests, 93 assertions)` through ddev, 5/6 deterministic graders passed; `drupal-workflow` fired and `brainstorming` did not |
+
+Reading: on a real project with a strong model, plain Superpowers solves a bounded implementation as well as the plugin and twice as fast; the plugin's surplus is evidence shape (reviewer verdict, phpstan, gate lines) and policy (no hand-written rows on a real site), not the outcome. The plugin loses where its own trigger fails (`drupal-workflow` on a plan request) and where it is more cautious than the environment requires (no L3 on a running DISPOSABLE lab). Both are fixed in the six changes below; the re-measurement is pending on the account limit (resets 13:00 Europe/Prague).
+
+Six changes made on the strength of this table: (1) `drupal-workflow` description now names plan requests, and `drupal-architecture` hands a plan-shaped deliverable to the Plan phase; (2) the plan's API table carries the `web/core/...php:line` where a signature was verified; (3) `drupal-runtime-verification/references/live-verification.md`: on LOCAL/DISPOSABLE with a running adapter, L3 is expected (enable, test users via Drush, requests as three user classes, two-user cache check, logs, cleanup), and the gate matrix upgrades Live from `opt` to `req` there; (4) fan-out: the Design phase runs the design-review checklist rows instead of loading `drupal-security`, `drupal-cacheability`, `drupal-config`; those load at Implement, once per task, only for the file class being written (baseline: 8 skill bodies ≈ 38.7k chars ≈ 9.7k tokens on the implement run); (5) research is one pass per task (`drupal-research` decision rule + workflow phase 3); (6) `scripts/compare-arms` makes the three-arm table a one-command, repeatable metric.
+
+Re-measured the same afternoon, plugin only, same model and labs:
+
+| Case | before the six changes | after |
+|---|---|---|
+| `trigger` + `no-trigger` for `drupal-workflow` and `drupal-architecture` | 4/4 | **4/4** (description change verified) |
+| `ddev-plan-real-core` | 7/9, 500 s, 9 calls, `drupal-workflow` silent | **9/9**, 679 s, 22 calls; `drupal-workflow` → project-understanding → contrib-research → architecture → testing → verification; the plan quotes the module's constructor and `getSavedNodeIds()`, carries `web/core/...` paths, ddev commands, code in every task |
+| `scenarios/plan-real-code` (fixture, no core) | 7/7 and 7/7 (1043 s, 1059 s) | **7/7**, 1296 s, 65 calls of which 27 web look-ups: the write-first order held, but the one-pass research rule did not reduce web traffic on a checkout without core (the reference allows one look-up per API row, and the plan had that many rows); an open item, not a regression |
+| `ddev-saved-list-real-test` | 6/6, 649 s, 44 calls, 8 skill bodies ≈ 9.7k tokens, Live `NOT VERIFIED` | **6/6**, 859 s, 59 calls, 5 skill bodies ≈ 7.1k tokens (cacheability, testing, contrib-research no longer loaded up front), `OK (4 tests, 112 assertions)`, **Live PASS**: anonymous 403, owner 200 with only the published node, other user 403, admin 200, no watchdog errors, test users and rows removed afterwards; security reviewer APPROVE WITH NOTES |
+
+The extra 200 s on the implementation run is the L3 work the plugin now does and Superpowers already did; the plan run's extra 180 s is the Plan phase itself. Clean `both` arm afterwards (`scripts/compare-arms --arms both --tag ddev`, results in `evals/results/compare-20260906-170623/`): plan **9/9** in 1123 s / 29 calls (`brainstorming` → `drupal-architecture` → `writing-plans`, `drupal-workflow` silent as designed; one grader defect found on the way: `reads-existing-module` missed a `find web/modules/custom … cat` read, now matches `modules/custom` too) and implementation **6/6** in 849 s / 55 calls (`drupal-workflow` fired, `brainstorming` did not; `OK (5 tests, 95 assertions)` through ddev, `_user_is_logged_in` + `_custom_access`). No double orchestration in either case: with both plugins present, exactly one process skill owns the flow and the Drupal skills feed it.
+
+Final three-arm table on the DDEV labs (plugin figures after the six changes):
+
+| Case | plugin | Superpowers | both |
+|---|---|---|---|
+| plan | 9/9, 679 s | 9/9, 1113 s | 9/9, 1123 s |
+| implementation | 6/6, 859 s (L3 live PASS) | 6/6, 289 s (L3 by hand-written row) | 6/6, 849 s |
+
+### Regression sweep after the six changes (2026-09-06, evening)
+
+Bodies of `drupal-workflow`, `drupal-research`, `drupal-runtime-verification` and the gate matrix changed, so every non-integration group was re-run against the current tree (four parallel shards, LLM graders on, one run each):
+
+| Group | Result | Notes |
+|---|---|---|
+| scenarios (21) | 19/21 first pass | `regression-test` hit its 600 s timeout while dispatching the security reviewer at the very end (all three deterministic graders had already passed); the case now has the 900 s the other TDD cases already had. `tailwind-scan-surface` was a grader defect: the run replaced `src/tailwind.css` with `dist/tailwind.css` correctly but wrote a YAML comment saying "never src/tailwind.css", which the `not_contains` regex matched; the pattern now matches only the YAML key with its `{}` value (verified against both the produced file and the fixture) |
+| acceptance (5) | 3/5 first pass | 01, 03, 05 PASS. **02 and 04 failed on the same behaviour**: both classified `bounded` correctly, then skipped the Test plan phase — 02 patched `GreetingBlock.php` before writing the Kernel test, 04 wrote no test at all with "phpunit is not installed" as the excuse. Both cases passed on 2026-09-04; re-run with `--runs 2` to separate variance from a regression caused by the shorter Design phase |
+| agents (2) | 2/2 | |
+
 ## 9. CI mapping
 
 | Job | Command | When |
@@ -306,6 +367,7 @@ The half-built `d11-legacy` leftover could not be removed by `drupal-lab destroy
 | script-tests | bash asserts for `drupal-profile`, `drupal-runtime`, `guard-bash` against fixtures | every push |
 | evals-trigger | `scripts/run-evals --group trigger --group no-trigger --no-llm --runs 1` | every PR |
 | evals-full | `scripts/run-evals --group scenarios --group agents --group acceptance --runs 2` | nightly, label `evals` |
-| evals-integration | `evals/integration/` in place against labs named by `DSP_LAB_D11` / `DSP_LAB_D10` (built with `fixtures/lab-compose/` or natively) — not yet wired into `ci.yml` | manual / on request |
+| evals-integration | `evals/integration/` in place against labs named by `DSP_LAB_D11` / `DSP_LAB_D10` / `DSP_LAB_DDEV` (built with `scripts/drupal-lab create … --engine ddev|docker|native`) — not yet wired into `ci.yml` | manual / on request |
+| evals-compare | `scripts/compare-arms --tag ddev` (plugin / Superpowers-only / both on the DDEV lab) and `scripts/compare-arms --group scenarios --case plan-real-code`; the three-arm table goes to `evals/results/compare-<stamp>/summary.md` and §8 | nightly with the `evals` label, and before any claim about Superpowers |
 
 The `p2` tag on acceptance 03/05 is informational only (Phase 2 is done); the runner gates every selected case.

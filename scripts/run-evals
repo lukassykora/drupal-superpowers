@@ -200,16 +200,19 @@ def grade(g, parsed, cwd, llm_ok, model):
         # `files:` lets a judge grade the artifacts on disk instead of guessing from the transcript;
         # agents often write through Bash heredocs or subagents, which the parent stream does not show.
         if g.get("files"):
-            produced, budget = {}, 120000
+            # `file_chars` (per file, default 8000) and `file_budget` (all files, default 120000) let a case
+            # hand the judge a long artifact such as an implementation plan without truncating its tasks.
+            produced, budget = {}, int(g.get("file_budget", 120000))
+            per_file = int(g.get("file_chars", 8000))
             for pat in (g["files"] if isinstance(g["files"], list) else [g["files"]]):
                 for h in sorted(glob.glob(os.path.join(cwd, pat), recursive=True)):
                     if not os.path.isfile(h) or budget <= 0:
                         continue
-                    body = open(h, errors="replace").read()[:8000]
+                    body = open(h, errors="replace").read()[:per_file]
                     produced[os.path.relpath(h, cwd)] = body
                     budget -= len(body)
             payload["files_on_disk"] = produced
-        transcript = json.dumps(payload, indent=1)[-200000:]
+        transcript = json.dumps(payload, indent=1)[-max(200000, int(g.get("file_budget", 0)) + 80000):]
         judge_prompt = ("You are grading an AI coding agent's run against strict criteria. Answer with exactly one line: "
                         "PASS or FAIL, then a colon and one sentence of reason. Do not be lenient: every clause of the criteria must hold. "
                         "Tool results are included (truncated to 1200 chars each); treat them as the evidence of what really ran. "

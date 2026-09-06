@@ -46,6 +46,7 @@ Every check is recorded as `VERIFY <level> <check> <PASS|FAIL|NOT VERIFIED|NOT A
 ## DDEV policy
 
 - A project that uses DDEV is driven through DDEV. Claude does not start a stopped project without saying so.
+- On LOCAL or DISPOSABLE with a running adapter, live verification (L3) is part of the job for user-visible changes: enable the module, create test users with Drush, request as anonymous / without / with permission, compare two users on personalised pages, read logs, clean up (`skills/drupal-runtime-verification/references/live-verification.md`). Never by writing rows into the database by hand.
 - No runtime at all: Claude may *offer* a disposable environment (DDEV if installed, otherwise Docker Compose from the plugin's recipe) under `${CLAUDE_PLUGIN_DATA}/labs/<name>` with a `.drupal-superpowers-lab` marker; it never installs Docker or DDEV, never changes host configuration, never touches the project's own environment. Teardown is one command. Details: `skills/drupal-runtime-verification/references/disposable-lab.md`.
 - Docker Compose recipe for the lab: `fixtures/lab-compose/` — verified on 2026-09-04 with a real Drupal 10.6.16 install (PHP 8.3.33, MariaDB 10.11): the php service installs extensions and Composer on first start (~2 min), `drush site:install` and Kernel tests on MariaDB work; `composer require drupal/core-dev` needs `--with-all-dependencies` on a fresh recommended-project.
 
